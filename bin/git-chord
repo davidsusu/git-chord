@@ -1,0 +1,35 @@
+#!/bin/sh
+
+TRACKER_PREFIX_KEY='chord.tracker.prefix'
+TRACKER_PREFIX_DEFAULT='chord/'
+TRACKER_DEFAULT_KEY='chord.tracker.default'
+TRACKER_DEFAULT_DEFAULT='main'
+COVERED_REGEX_KEY='chord.covered.regex'
+COVERED_REGEX_DEFAULT='.*'
+
+if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    echo "Not a git repository" >&2
+    exit 1
+fi
+
+trackerPrefix="$( git config --get "$TRACKER_PREFIX_KEY" 2>/dev/null )"
+if [ -z "$trackerPrefix" ]; then
+    trackerPrefix="$TRACKER_PREFIX_DEFAULT"
+fi
+
+trackerDefault="$( git config --get "$TRACKER_DEFAULT_KEY" 2>/dev/null )"
+if [ -z "$trackerDefault" ]; then
+    trackerDefault="$TRACKER_DEFAULT_DEFAULT"
+fi
+
+coveredRegex="$( git config --get "$COVERED_REGEX_KEY" 2>/dev/null )"
+if [ -z "$coveredRegex" ]; then
+    coveredRegex="$COVERED_REGEX_DEFAULT"
+fi
+
+echo 'CONFIG:'
+echo "    tracker.prefix: ${trackerPrefix}"
+echo "    tracker.default: ${trackerDefault}"
+echo "    covered.regex: ${coveredRegex}"
+
+# TODO
