@@ -77,19 +77,18 @@ getArgumentKey() { # $1: arg
     normalizeKey "$( printf '%s\n' "$1" | cut -d '=' -f 1 | sed -E 's/\-\-(no\-)?//i' )"
 }
 
-getArgumentValue() { # $1: arg, $2: isBool
-    local_getArgumentValue_candidate="$( printf '%s\n' "$1" | cut -d '=' -s -f 2- )" # FIXME
-    if [ -z "$local_getArgumentValue_candidate" ] && [ -n "$2" ]; then
+getArgumentValue() ( # $1: arg, $2: isBool, subshell local: $candidate
+    candidate="$( printf '%s\n' "$1" | cut -d '=' -s -f 2- )"
+    if [ -z "$candidate" ] && [ -n "$2" ]; then
         if checkStartsWith "$1" '--no-'; then
             echo 'false'
         else
             echo 'true'
         fi
     else
-        printf '%s\n' "$local_getArgumentValue_candidate"
+        printf '%s\n' "$candidate"
     fi
-    unset local_getArgumentValue_candidate
-}
+)
 
 isArgumentNextExpected() { # $1: arg, $2: isBool
     if [ -n "$2" ]; then
@@ -125,23 +124,22 @@ $( printf '%s\n' "$1" )
 EOF
 }
 
-setConfigValue() { # $1: config, $2: key, $3: newValue
-    local_setConfigValue_found='' # FIXME
+setConfigValue() ( # $1: config, $2: key, $3: newValue, subshell local: $found
+    found=''
     while IFS= read -r line; do
         if [ "$( printf '%s\n' "$line" | cut -d ' ' -f 1 )" = "$2" ]; then
             printf '%s %s\n' "$2" "$3"
-            local_setConfigValue_found='1'
+            found='1'
         else
             printf '%s\n' "$line"
         fi
     done <<EOF
 $( printf '%s\n' "$1" )
 EOF
-    if [ -z "$local_setConfigValue_found" ]; then
+    if [ -z "$found" ]; then
         printf '%s %s\n' "$2" "$3"
     fi
-    unset local_setConfigValue_found
-}
+)
 
 defaults=$( printf '%s' "$OPTIONS" | sed -E 's/ #[^#]*//' )
 config="$defaults"
