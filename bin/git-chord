@@ -223,7 +223,7 @@ case "$command" in
             git --version
             printf "chord version %s\n" "$VERSION"
         else
-            printf '%s' "$VERSION"
+            printf '%s\n' "$VERSION"
         fi
         exit 0
         ;;
