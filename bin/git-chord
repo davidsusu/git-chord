@@ -1,35 +1,251 @@
 #!/bin/sh
 
-TRACKER_PREFIX_KEY='chord.tracker.prefix'
-TRACKER_PREFIX_DEFAULT='chord/'
-TRACKER_DEFAULT_KEY='chord.tracker.default'
-TRACKER_DEFAULT_DEFAULT='main'
-COVERED_REGEX_KEY='chord.covered.regex'
-COVERED_REGEX_DEFAULT='.*'
+VERSION='0.1.0-SNAPSHOT'
+
+COMMANDS="$( printf '%s' '
+help # Prints help (also works: -h)
+version # Prints version of the chord extension (also works: -v)
+snapshot # Creates a snapshot of the repository state
+apply # Applies a previously saved snapshot to the repository
+show # Shows full data of a previously saved snapshot
+' | tail -n +2 )"
+
+DEFAULT_COMMAND='snapshot'
+
+OPTIONS="$( printf '%s' '
+trackers.prefix chord/ # Sets the tracker branch prefix
+trackers.default main # Sets the tracker branch name
+branches.store true # Enables tracking branches
+branches.regex .* # Sets the regex pattern for tracked branches
+branches.allowremove true # Allows removing branches
+branches.allowadd true # Allows adding branches
+annotatedtags.store true # Enables tracking annotated tags
+annotatedtags.regex .* # Sets the regex pattern for tracked annotated tags
+annotatedtags.allowremove true # Allows removing annotated tags
+annotatedtags.allowadd true # Allows adding annotated tags
+lightweighttags.store false # Enables tracking lightweight tags
+lightweighttags.regex .* # Sets the regex pattern for tracked lightweight tags
+lightweighttags.allowremove false # Allows removing lightweight tags
+lightweighttags.allowadd false # Allows adding lightweight tags
+head.store true # Enables tracking the HEAD
+head.allowapply true # Allows moving the HEAD
+stagingarea.store false # Enables tracking the state of the staging area
+stagingarea.allowapply false # Allows changing the staging area
+stagingarea.allowoverwrite false # Allows overwriting even a dirty staging area
+workingtree.store false # Enables tracking the state of the working tree
+workingtree.allowapply false # Allows changing the working tree
+workingtree.allowoverwrite false # Allows overwriting even a dirty working tree
+dryrun false # Enables dry-run mode, no modification will be applied
+verbose false # Enables verbose mode, more information will be printed
+' | tail -n +2 )"
+
+checkStartsWith() { # $1: contextString, $2: prefixToCheck
+    case "$1" in
+        "$2"*) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+appendLine() { # $1: array, $2:newLine
+    if [ -n "$1" ]; then
+        printf "%s\n%s" "$1" "$2"
+    else
+        printf "%s" "$2"
+    fi
+}
+
+normalizeKey() { # $1: rawKey
+    printf '%s\n' "$1" | sed -E 's/^\-\-(no\-)?//i' | tr '-' '.' | tr '[:upper:]' '[:lower:]'
+}
+
+isBoolValue() { # $1: valueToCheck
+    if [ "$1" = 'true' ] || [ "$1" = 'false' ]; then
+        echo '1'
+    else 
+        echo ''
+    fi
+}
+
+checkTruthy() { # $1: valueToCheck
+    case "$1" in
+        true|on|yes|1) return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
+getArgumentKey() { # $1: arg
+    normalizeKey "$( printf '%s\n' "$1" | cut -d '=' -f 1 | sed -E 's/\-\-(no\-)?//i' )"
+}
+
+getArgumentValue() { # $1: arg, $2: isBool
+    local_getArgumentValue_candidate="$( printf '%s\n' "$1" | cut -d '=' -s -f 2- )" # FIXME
+    if [ -z "$local_getArgumentValue_candidate" ] && [ -n "$2" ]; then
+        if checkStartsWith "$1" '--no-'; then
+            echo 'false'
+        else
+            echo 'true'
+        fi
+    else
+        printf '%s\n' "$local_getArgumentValue_candidate"
+    fi
+    unset local_getArgumentValue_candidate
+}
+
+isArgumentNextExpected() { # $1: arg, $2: isBool
+    if [ -n "$2" ]; then
+        echo ''
+    else
+        case "$1" in
+            *=*) echo '' ;;
+            *) echo '1' ;;
+        esac
+    fi
+}
+
+checkConfigKey() { # $1: config, $2: key, $3: messagePrefix
+    while IFS= read -r line; do
+        if [ "$( printf '%s\n' "$line" | cut -d ' ' -f 1 )" = "$2" ]; then
+            return 0
+        fi
+    done <<EOF
+$( printf '%s\n' "$1" )
+EOF
+    printf '%sUnrecognized configuration key: %s\n' "$3" "$2" >&2
+    return 1
+}
+
+getConfigValue() { # $1: config, $2: key
+    while IFS= read -r line; do
+        if [ "$( printf '%s\n' "$line" | cut -d ' ' -f 1 )" = "$2" ]; then
+            printf '%s\n' "$line" | cut -d ' ' -s -f 2-
+            break
+        fi
+    done <<EOF
+$( printf '%s\n' "$1" )
+EOF
+}
+
+setConfigValue() { # $1: config, $2: key, $3: newValue
+    local_setConfigValue_found='' # FIXME
+    while IFS= read -r line; do
+        if [ "$( printf '%s\n' "$line" | cut -d ' ' -f 1 )" = "$2" ]; then
+            printf '%s %s\n' "$2" "$3"
+            local_setConfigValue_found='1'
+        else
+            printf '%s\n' "$line"
+        fi
+    done <<EOF
+$( printf '%s\n' "$1" )
+EOF
+    if [ -z "$local_setConfigValue_found" ]; then
+        printf '%s %s\n' "$2" "$3"
+    fi
+    unset local_setConfigValue_found
+}
+
+defaults=$( printf '%s' "$OPTIONS" | sed -E 's/ #[^#]*//' )
+config="$defaults"
+
+while IFS= read -r line; do
+    givenKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 | sed -E 's/^chord\.//' )"
+    if [ -z "$givenKey" ]; then
+        continue
+    fi
+    if checkConfigKey "$defaults" "$givenKey" 'WARNING: '; then
+        givenValue="$( printf '%s\n' "$line" | cut -d ' ' -s -f 2- )"
+        config="$( setConfigValue "$config" "$givenKey" "$givenValue" )"
+    fi
+done <<EOF
+$( git config --get-regexp 'chord\..*' )
+EOF
+
+afterDoubleDash=''
+previousKey=''
+command=''
+nonOptArgs=''
+while [ "$#" -gt 0 ]; do
+    arg="$1"
+    shift
+    if [ -n "$previousKey" ]; then
+        config="$( setConfigValue "$config" "$previousKey" "$arg" )"
+        previousKey=''
+        continue
+    fi
+    if ! checkStartsWith "$arg" '--' || [ -n "$afterDoubleDash" ]; then
+        if [ -z "$command" ]; then
+            command="$arg"
+        else
+            nonOptArgs="$( appendLine "$nonOptArgs" "$arg" )"
+        fi
+        continue
+    elif [ "$arg" = '--' ]; then
+        afterDoubleDash='1'
+        continue
+    fi
+    argKey="$( getArgumentKey "$arg" )"
+    checkConfigKey "$defaults" "$argKey" || exit 1
+    argDefaultValue="$( getConfigValue "$defaults" "$argKey" 'FATAL: ' )"
+    argIsBool="$( isBoolValue "$argDefaultValue" )"
+    argValue="$( getArgumentValue "$arg" "$argIsBool" )"
+    argHasNext="$( isArgumentNextExpected "$arg" "$argIsBool" )"
+    if [ -n "$argHasNext" ]; then
+        previousKey="$argKey"
+    else
+        config="$( setConfigValue "$config" "$argKey" "$argValue" )"
+    fi
+done
+if [ -n "$previousKey" ]; then
+    printf 'No value argument given for configuration key: %s\n' "$previousKey" >&2
+    exit 1
+fi
+if [ -z "$command" ]; then
+    command="$DEFAULT_COMMAND"
+fi
+
+case "$command" in
+    help|-h)
+        
+        # TODO
+        echo ''
+        echo 'HELP for Git Chord'
+        echo ''
+        echo 'SUBCOMMANDS:'
+        echo '============'
+        echo "$COMMANDS"
+        echo ''
+        echo 'OPTIONS:'
+        echo '========'
+        echo "$OPTIONS"
+        echo ''
+        
+        exit 0
+        ;;
+    version|-v)
+        if checkTruthy "$( getConfigValue "$config" 'verbose' )"; then
+            git --version
+            printf "chord version %s\n" "$VERSION"
+        else
+            printf '%s' "$VERSION"
+        fi
+        exit 0
+        ;;
+esac
 
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
-    echo "Not a git repository" >&2
+    echo 'Not a git repository' >&2
     exit 1
 fi
 
-trackerPrefix="$( git config --get "$TRACKER_PREFIX_KEY" 2>/dev/null )"
-if [ -z "$trackerPrefix" ]; then
-    trackerPrefix="$TRACKER_PREFIX_DEFAULT"
-fi
-
-trackerDefault="$( git config --get "$TRACKER_DEFAULT_KEY" 2>/dev/null )"
-if [ -z "$trackerDefault" ]; then
-    trackerDefault="$TRACKER_DEFAULT_DEFAULT"
-fi
-
-coveredRegex="$( git config --get "$COVERED_REGEX_KEY" 2>/dev/null )"
-if [ -z "$coveredRegex" ]; then
-    coveredRegex="$COVERED_REGEX_DEFAULT"
-fi
-
-echo 'CONFIG:'
-echo "    tracker.prefix: ${trackerPrefix}"
-echo "    tracker.default: ${trackerDefault}"
-echo "    covered.regex: ${coveredRegex}"
 
 # TODO
+echo "COMMAND: $command"
+echo ""
+echo "Non-opt args:"
+echo "============="
+echo "$nonOptArgs"
+echo ""
+echo "Effective config:"
+echo "================="
+echo "$config"
+
+
