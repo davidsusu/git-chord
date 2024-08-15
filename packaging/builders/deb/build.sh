@@ -20,6 +20,8 @@ mkdir -p "$buildDir"
 # TODO
 (
     cat "${projectRootDir}/README.md" | head -n 1;
-    printf '\n\n...\n\n\n'
+    printf '\n\n........................\n\n'
+    "${projectRootDir}/bin/git-chord" help | sed -E 's/^([^=].*[^:=])$/\1\\/' | sed -E 's/^[A-Z]+:?$/**\0**/' | sed -E 's/^([a-z\.]+) /**\1** /' | tail -n +4;
+    printf '\n\n...\n\n\n';
     cat "${projectRootDir}/README.md" | tail -n +3;
 ) | pandoc -s -f gfm -t man -o "${buildDir}/git-chord.1"
