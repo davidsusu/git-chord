@@ -7,7 +7,9 @@ help # Prints help (also works: -h)
 version # Prints version of the chord extension (also works: -v)
 snapshot # Creates a snapshot of the repository state
 apply # Applies a previously saved snapshot to the repository
-show # Shows full data of a previously saved snapshot
+show # Shows full data of a previously saved snapshot (or using --all: all chord branches)
+push # Pushes the default chord branch (or using --all: all chord branches)
+pull # Pulls the default chord branch (or using --all: all chord branches)
 ' | tail -n +2 )"
 
 DEFAULT_COMMAND='snapshot'
@@ -15,6 +17,8 @@ DEFAULT_COMMAND='snapshot'
 OPTIONS="$( printf '%s' '
 trackers.prefix chord/ # Sets the tracker branch prefix
 trackers.default main # Sets the tracker branch name
+trackers.remotes.default origin # Sets the default remote name for tracker branches
+trackers.remotes.allowautoadd true # Allows automatically adding the default remote if necessary
 branches.store true # Enables tracking branches
 branches.regex .* # Sets the regex pattern for tracked branches
 branches.allowremove true # Allows removing branches
@@ -37,6 +41,7 @@ workingtree.allowapply false # Allows changing the working tree
 workingtree.allowoverwrite false # Allows overwriting even a dirty working tree
 dryrun false # Enables dry-run mode, no modification will be applied
 verbose false # Enables verbose mode, more information will be printed
+all false # Enables the operation for all related objects
 ' | tail -n +2 )"
 
 checkStartsWith() { # $1: contextString, $2: prefixToCheck
