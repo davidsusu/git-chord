@@ -5,6 +5,7 @@ VERSION='0.1.0-SNAPSHOT'
 COMMANDS="$( printf '%s' '
 help # Prints help (also works: -h)
 version # Prints version of the chord extension (also works: -v)
+config # Prints the current chord configuration (use --defaults to see the defaults)
 snapshot # Creates a snapshot of the repository state
 apply # Applies a previously saved snapshot to the repository
 show # Shows full data of a previously saved snapshot (or using --all: all chord branches)
@@ -47,6 +48,7 @@ workingtree.apply.enabled false # Enables applying the saved state of the workin
 workingtree.apply.allowoverwrite false # Allows overwriting even a dirty working tree
 dryrun false # Enables dry-run mode, no modification will be applied
 verbose false # Enables verbose mode, more information will be printed
+defaults false # Enables default mode, the default configuration will be used and printed (forcefully)
 all false # Enables the operation for all related objects
 ' | tail -n +2 )"
 
@@ -211,6 +213,19 @@ if [ -z "$command" ]; then
     command="$DEFAULT_COMMAND"
 fi
 
+subcomand="$( printf '%s\n' "$nonOptArgs" | head -n 1 )"
+
+if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
+    
+    # TODO
+    echo "HELP FOR ${command}"
+    exit 0
+    
+    #case "$command" in
+    #    config)
+    #esac
+fi
+
 case "$command" in
     help|-h)
         
@@ -238,6 +253,12 @@ case "$command" in
         fi
         exit 0
         ;;
+    config)
+        if ( [ -z "$nonOptArgs" ] || [ "$nonOptArgs" = 'list' ] ) && checkTruthy "$( getConfigValue "$config" 'defaults' )"; then
+            printf '%s\n' "$defaults"
+            exit 0
+        fi
+        ;;
 esac
 
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
@@ -245,6 +266,17 @@ if ! git rev-parse --git-dir > /dev/null 2>&1; then
     exit 1
 fi
 
+case "$command" in
+    config)
+        if [ -z "$nonOptArgs" ] || [ "$nonOptArgs" = 'list' ]; then
+            printf '%s\n' "$config"
+            exit 0
+        fi
+        # TODO
+        echo 'Not implemented yet' 1>&2
+        exit 1
+        ;;
+esac
 
 # TODO
 echo "COMMAND: $command"
