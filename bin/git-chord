@@ -19,26 +19,32 @@ trackers.prefix chord/ # Sets the tracker branch prefix
 trackers.default main # Sets the tracker branch name
 trackers.remotes.default origin # Sets the default remote name for tracker branches
 trackers.remotes.allowautoadd true # Allows automatically adding the default remote if necessary
-branches.store true # Enables tracking branches
-branches.regex .* # Sets the regex pattern for tracked branches
-branches.allowremove true # Allows removing branches
-branches.allowadd true # Allows adding branches
-annotatedtags.store true # Enables tracking annotated tags
-annotatedtags.regex .* # Sets the regex pattern for tracked annotated tags
-annotatedtags.allowremove true # Allows removing annotated tags
-annotatedtags.allowadd true # Allows adding annotated tags
-lightweighttags.store false # Enables tracking lightweight tags
-lightweighttags.regex .* # Sets the regex pattern for tracked lightweight tags
-lightweighttags.allowremove false # Allows removing lightweight tags
-lightweighttags.allowadd false # Allows adding lightweight tags
-head.store true # Enables tracking the HEAD
-head.allowapply true # Allows moving the HEAD
-stagingarea.store false # Enables tracking the state of the staging area
-stagingarea.allowapply false # Allows changing the staging area
-stagingarea.allowoverwrite false # Allows overwriting even a dirty staging area
-workingtree.store false # Enables tracking the state of the working tree
-workingtree.allowapply false # Allows changing the working tree
-workingtree.allowoverwrite false # Allows overwriting even a dirty working tree
+branches.store.enabled true # Enables saving state of tracked branches
+branches.store.regex .* # Sets the regex pattern for saving tracked branches
+branches.apply.enabled true # Enables applying the saved state of tracked branches
+branches.apply.regex .* # Sets the regex pattern for applying tracked branches
+branches.apply.allowremove true # Allows removing branches
+branches.apply.allowadd true # Allows adding branches
+annotatedtags.store.enabled true # Enables saving state of tracked annotated tags
+annotatedtags.store.regex .* # Sets the regex pattern for saving tracked annotated tags
+annotatedtags.apply.enabled true # Enables applying the saved state of tracked annotated tags
+annotatedtags.apply.regex .* # Sets the regex pattern for applying tracked annotated tags
+annotatedtags.apply.allowremove true # Allows removing annotated tags
+annotatedtags.apply.allowadd true # Allows adding annotated tags
+lightweighttags.store.enabled false # Enables saving state of tracked lightweight tags
+lightweighttags.store.regex .* # Sets the regex pattern for saving tracked lightweight tags
+lightweighttags.apply.enabled true # Enables applying the saved state of tracked lightweight tags
+lightweighttags.apply.regex .* # Sets the regex pattern for applying tracked lightweight tags
+lightweighttags.apply.allowremove false # Allows removing lightweight tags
+lightweighttags.apply.allowadd false # Allows adding lightweight tags
+head.store.enabled true # Enables saving state of the HEAD
+head.apply.enabled true # Allows moving the HEAD
+stagingarea.store.enabled false # Enables saving state of the staging area
+stagingarea.apply.enabled false # Enables applying the saved state of the staging area
+stagingarea.apply.allowoverwrite false # Allows overwriting even a dirty staging area
+workingtree.store.enabled false # Enables saving the state of the working tree
+workingtree.apply.enabled false # Enables applying the saved state of the working tree
+workingtree.apply.allowoverwrite false # Allows overwriting even a dirty working tree
 dryrun false # Enables dry-run mode, no modification will be applied
 verbose false # Enables verbose mode, more information will be printed
 all false # Enables the operation for all related objects
