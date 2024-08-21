@@ -3,14 +3,14 @@
 VERSION='0.1.0-SNAPSHOT'
 
 COMMANDS="$( printf '%s' '
-help # Prints help (also works: -h)
-version # Prints version of the chord extension (also works: -v)
-config # Prints the current chord configuration (use --defaults to see the defaults)
+help # Prints help (also works: <-h>)
+version # Prints version of the chord extension (also works: <-v>)
+config # Prints the current chord configuration (use <--defaults> to see the defaults)
 snapshot # Creates a snapshot of the repository state
 apply # Applies a previously saved snapshot to the repository
-show # Shows full data of a previously saved snapshot (or using --all: all chord branches)
-push # Pushes the default chord branch (or using --all: all chord branches)
-pull # Pulls the default chord branch (or using --all: all chord branches)
+show # Shows full data of a previously saved snapshot (or using <--all>: all chord branches)
+push # Pushes the default chord branch (or using <--all>: all chord branches)
+pull # Pulls the default chord branch (or using <--all>: all chord branches)
 ' | tail -n +2 )"
 
 DEFAULT_COMMAND='snapshot'
@@ -273,7 +273,10 @@ case "$command" in
         commandI=0
         printf '%s\n' "$commandNames" | while IFS= read -r commandName; do
             commandI=$(( commandI + 1 ))
-            commandComment="$( printf '%s\n'  "$commandComments" | sed "${commandI}q;d" )"
+            commandComment="$( printf '%s\n'  "$commandComments" |
+                sed "${commandI}q;d" |
+                sed -E "s/</${formatBold}/" |
+                sed -E "s/>/${formatReset}/" )"
             printf "  %s%s%s\n" "$formatBold" "$commandName" "$formatReset"
             printf "    %s\n" "$commandComment"
             if checkTruthy "$configValue_verbose"; then
