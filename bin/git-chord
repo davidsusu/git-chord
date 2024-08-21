@@ -48,6 +48,7 @@ workingtree.apply.enabled false # Enables applying the saved state of the workin
 workingtree.apply.allowoverwrite false # Allows overwriting even a dirty working tree
 dryrun false # Enables dry-run mode, no modification will be applied
 verbose false # Enables verbose mode, more information will be printed
+color true # Enables color mode, ANSI escapes will be used in the output
 defaults false # Enables default mode, the default configuration will be used and printed (forcefully)
 all false # Enables the operation for all related objects
 ' | tail -n +2 )"
@@ -71,8 +72,20 @@ normalizeKey() { # $1: rawKey
     printf '%s\n' "$1" | sed -E 's/^\-\-(no\-)?//i' | tr '-' '.' | tr '[:upper:]' '[:lower:]'
 }
 
-isBoolValue() { # $1: valueToCheck
+escapeValue() {
+    printf '%s\n' "$1" | sed "s/'/'\\\\''/g"
+}
+
+checkBoolValue() { # $1: valueToCheck
     if [ "$1" = 'true' ] || [ "$1" = 'false' ]; then
+        return 0
+    else 
+        return 1
+    fi
+}
+
+isBoolValue() { # $1: valueToCheck
+    if checkBoolValue "$1"; then
         echo '1'
     else 
         echo ''
@@ -195,7 +208,7 @@ while [ "$#" -gt 0 ]; do
     fi
     argKey="$( getArgumentKey "$arg" )"
     checkConfigKey "$defaults" "$argKey" || exit 1
-    argDefaultValue="$( getConfigValue "$defaults" "$argKey" 'FATAL: ' )"
+    argDefaultValue="$( getConfigValue "$defaults" "$argKey" )"
     argIsBool="$( isBoolValue "$argDefaultValue" )"
     argValue="$( getArgumentValue "$arg" "$argIsBool" )"
     argHasNext="$( isArgumentNextExpected "$arg" "$argIsBool" )"
@@ -213,7 +226,30 @@ if [ -z "$command" ]; then
     command="$DEFAULT_COMMAND"
 fi
 
-subcomand="$( printf '%s\n' "$nonOptArgs" | head -n 1 )"
+subcommand="$( printf '%s\n' "$nonOptArgs" | head -n 1 )"
+
+while IFS= read -r configLine; do
+    configValue="$( printf '%s\n' "$configLine" | cut -d ' ' -f 2- )"
+    outVariableName="configValue_$( printf '%s\n' "$configLine" | cut -d ' ' -f 1 | tr '.' '_' )"
+    eval "${outVariableName}='$( escapeValue "$configValue")'"
+done <<EOF
+$( printf '%s\n' "$config" )
+EOF
+
+formatError=''
+formatWarning=''
+formatSuccess=''
+formatInfo=''
+formatBold=''
+formatReset=''
+if checkTruthy "$configValue_color"; then
+    formatError="$( printf '\e[1;31m' )"
+    formatWarning="$( printf '\e[1;33m' )"
+    formatSuccess="$( printf '\e[1;32m' )"
+    formatInfo="$( printf '\e[1;96m' )"
+    formatBold="$( printf '\e[1m' )"
+    formatReset="$( printf '\e[0m' )"
+fi
 
 if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
     
@@ -228,24 +264,50 @@ fi
 
 case "$command" in
     help|-h)
-        
-        # TODO
-        echo ''
-        echo 'HELP for Git Chord'
-        echo ''
-        echo 'SUBCOMMANDS:'
-        echo '============'
-        echo "$COMMANDS"
-        echo ''
-        echo 'OPTIONS:'
-        echo '========'
-        echo "$OPTIONS"
-        echo ''
-        
+        helpTitle='HELP for Git Chord:'
+        printf '\n%s%s%s\n' "$formatBold" "$helpTitle" "$formatReset"
+        printf "%s%$( printf '%s' "$helpTitle" | wc -c )s%s\n" "$formatBold" '' "$formatReset" | tr ' ' '='
+        printf '\n%s%s%s\n\n' "$formatBold" 'Subcommands:' "$formatReset"
+        commandNames="$( printf '%s\n'  "$COMMANDS" | cut -d ' ' -f 1 )"
+        commandComments="$( printf '%s\n'  "$COMMANDS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
+        commandI=0
+        printf '%s\n' "$commandNames" | while IFS= read -r commandName; do
+            commandI=$(( commandI + 1 ))
+            commandComment="$( printf '%s\n'  "$commandComments" | sed "${commandI}q;d" )"
+            printf "  %s%s%s\n" "$formatBold" "$commandName" "$formatReset"
+            printf "    %s\n" "$commandComment"
+            if checkTruthy "$configValue_verbose"; then
+                echo ''
+            fi
+        done
+        printf '\n%s%s%s\n\n' "$formatBold" 'Options:' "$formatReset"
+        configKeys="$( printf '%s\n'  "$defaults" | cut -d ' ' -f 1 )"
+        defaultValues="$( printf '%s\n'  "$defaults" | cut -d ' ' -f 2- )"
+        configComments="$( printf '%s\n'  "$OPTIONS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
+        configI=0
+        printf '%s\n' "$configKeys" | while IFS= read -r configKey; do
+            configI="$(( configI + 1 ))"
+            defaultValue="$( printf '%s\n'  "$defaultValues" | sed "${configI}q;d" )"
+            configComment="$( printf '%s\n'  "$configComments" | sed "${configI}q;d" )"
+            optionPrefix='--'
+            if checkBoolValue "$defaultValue"; then
+                optionPrefix='--[no-]'
+                configComment="$( printf '%s\n' "$configComment" | sed -E 's/ /\/disables /' )"
+            fi
+            optionName="${optionPrefix}$( printf '%s\n' "$configKey" | tr '.' '-' )"
+            
+            if checkTruthy "$configValue_verbose"; then
+                printf '  %s%-41s%s%sBuilt-in default: %s%s\n      %s\n\n' \
+                    "$formatBold" "$optionName" "$formatReset" "$formatInfo" "$defaultValue" "$formatReset" "$configComment"
+            else
+                printf '  %s%-41s%s\n      %s\n' \
+                    "$formatBold" "$optionName" "$formatReset" "$configComment"
+            fi
+        done
         exit 0
         ;;
     version|-v)
-        if checkTruthy "$( getConfigValue "$config" 'verbose' )"; then
+        if checkTruthy "$configValue_verbose"; then
             git --version
             printf "chord version %s\n" "$VERSION"
         else
@@ -254,7 +316,7 @@ case "$command" in
         exit 0
         ;;
     config)
-        if ( [ -z "$nonOptArgs" ] || [ "$nonOptArgs" = 'list' ] ) && checkTruthy "$( getConfigValue "$config" 'defaults' )"; then
+        if { [ -z "$nonOptArgs" ] || [ "$nonOptArgs" = 'list' ] ; } && checkTruthy "$configValue_defaults"; then
             printf '%s\n' "$defaults"
             exit 0
         fi
@@ -262,7 +324,7 @@ case "$command" in
 esac
 
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
-    echo 'Not a git repository' >&2
+    printf '%sERROR: Not a git repository%s\n' "$formatError" "$formatReset" >&2
     exit 1
 fi
 
