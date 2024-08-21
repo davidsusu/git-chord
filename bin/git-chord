@@ -99,6 +99,12 @@ checkTruthy() { # $1: valueToCheck
     esac
 }
 
+printNlIf() { # $1: isVerbose
+    if checkTruthy "$1"; then
+        echo ''
+    fi
+}
+
 getArgumentKey() { # $1: arg
     normalizeKey "$( printf '%s\n' "$1" | cut -d '=' -f 1 | sed -E 's/\-\-(no\-)?//i' )"
 }
@@ -252,14 +258,26 @@ if checkTruthy "$configValue_color"; then
 fi
 
 if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
-    
-    # TODO
-    echo "HELP FOR ${command}"
-    exit 0
-    
-    #case "$command" in
-    #    config)
-    #esac
+    case "$command" in
+        help|-h)
+            printf '%s%s%s\n\n' "$formatBold" 'git chord help' "$formatReset"
+            printNlIf "$configValue_verbose"
+            printf '%s%s%s\n' "$formatBold" 'Example:' "$formatReset"
+            printNlIf "$configValue_verbose"
+            printf '  %s\n\n' 'git chord help'
+            printNlIf "$configValue_verbose"
+            printf '%s%s%s\n' "$formatBold" 'Description:' "$formatReset"
+            printNlIf "$configValue_verbose"
+            echo '  Prints information about the available subcommands and options.'
+            printNlIf "$configValue_verbose"
+            exit 0
+            ;;
+        # TODO
+        *)
+            printf '%s%s: %s%s\n' "$formatError" "ERROR: No help for subcommand" "$subcommand" "$formatReset" >&2
+            exit 1
+            ;;
+    esac
 fi
 
 case "$command" in
@@ -267,6 +285,16 @@ case "$command" in
         helpTitle='HELP for Git Chord:'
         printf '\n%s%s%s\n' "$formatBold" "$helpTitle" "$formatReset"
         printf "%s%$( printf '%s' "$helpTitle" | wc -c )s%s\n" "$formatBold" '' "$formatReset" | tr ' ' '='
+        printf '\n%s%s%s\n' "$formatBold" 'Usage:' "$formatReset"
+        if checkTruthy "$configValue_verbose"; then
+            echo ''
+        fi
+        printf '  %s\n' 'git chord [<subcommand>] [<options...>]'
+        if checkTruthy "$configValue_verbose"; then
+            printf '\n\n%s%s%s\n\n' "$formatBold" 'Example:' "$formatReset"
+            printf '  %s\n' 'git chord push --trackers-remotes-allowautoadd --all --verbose'
+            echo ''
+        fi
         printf '\n%s%s%s\n\n' "$formatBold" 'Subcommands:' "$formatReset"
         commandNames="$( printf '%s\n'  "$COMMANDS" | cut -d ' ' -f 1 )"
         commandComments="$( printf '%s\n'  "$COMMANDS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
