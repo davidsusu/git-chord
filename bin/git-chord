@@ -62,9 +62,9 @@ checkStartsWith() { # $1: contextString, $2: prefixToCheck
 
 appendLine() { # $1: array, $2:newLine
     if [ -n "$1" ]; then
-        printf "%s\n%s" "$1" "$2"
+        printf '%s\n%s' "$1" "$2"
     else
-        printf "%s" "$2"
+        printf '%s' "$2"
     fi
 }
 
@@ -307,29 +307,26 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             printf '%s%s%s\n' "$formatBold" 'Sub-subcommands:' "$formatReset"
             printNlIf "$configValue_verbose"
             (
-                echo -n "${formatBold}list${formatReset}: "
-                echo -n "This is the default command. "
-                echo -n "Lists all the available configuration keys and their values. "
-                echo -n "Using the ${formatBold}--default${formatReset} option you can see the defaults only, "
-                echo -n "this option works out of git repositories too. "
-                echo -n "Using the ${formatBold}--all${formatReset} option you can list the ad hoc command line options too."
-            echo '' ) | fold -w 80 -s | sed -E 's/^/  /'
+                printf '<list>: This is the default command. '
+                printf 'Lists all the available configuration keys and their values. '
+                printf 'Using the <--default> option you can see the defaults only, '
+                printf 'this option works out of git repositories too. '
+                printf 'Using the <--all> option you can list the ad hoc command line options too.'
+            echo '' ) | sed -E "s/</${formatBold}/" | sed -E "s/>/${formatReset}/" | fold -w 80 -s | sed -E 's/^/  /'
             printNlIf "$configValue_verbose"
             (
-                echo -n "${formatBold}get${formatReset}: "
-                echo -n "Gets the value of a given configuration key. "
-                echo -n "Using the ${formatBold}--default${formatReset} option you can see the default value, "
-                echo -n "this option works out of git repositories too. "
-            echo '' ) | fold -w 80 -s | sed -E 's/^/  /'
+                printf '<get>: Gets the value of a given configuration key. '
+                printf 'Using the <--default> option you can see the default value, '
+                printf 'this option works out of git repositories too. '
+            echo '' ) | sed -E "s/</${formatBold}/" | sed -E "s/>/${formatReset}/" | fold -w 80 -s | sed -E 's/^/  /'
             printNlIf "$configValue_verbose"
             (
-                echo -n "${formatBold}set${formatReset}: "
-                echo -n "Changes the value of a given configuration key. "
-                echo -n "You need to specify the key first, then the value. "
-                echo -n "This sub-subcommand works only inside a git repository, "
-                echo -n "and will save the value as a repository scoped git config "
-                echo -n "using the prefix '${formatBold}chord.${formatReset}' in the key."
-            echo '' ) | fold -w 80 -s | sed -E 's/^/  /'
+                printf '<set>: Changes the value of a given configuration key. '
+                printf 'You need to specify the key first, then the value. '
+                printf 'This sub-subcommand works only inside a git repository, '
+                printf 'and will save the value as a repository scoped git config '
+                printf 'using the prefix '\''<chord.>'\'' in the key.'
+            echo '' ) | sed -E "s/</${formatBold}/" | sed -E "s/>/${formatReset}/" | fold -w 80 -s | sed -E 's/^/  /'
             printNlIf "$configValue_verbose"
             exit 0
             ;;
@@ -362,8 +359,8 @@ case "$command" in
         printf '%s\n' "$commandNames" | while IFS= read -r commandName; do
             commandI=$(( commandI + 1 ))
             commandComment="$( getNthLine "$commandComments" "$commandI" | sed -E "s/</${formatBold}/" | sed -E "s/>/${formatReset}/" )"
-            printf "  %s%s%s\n" "$formatBold" "$commandName" "$formatReset"
-            printf "    %s\n" "$commandComment"
+            printf '  %s%s%s\n' "$formatBold" "$commandName" "$formatReset"
+            printf '    %s\n' "$commandComment"
             printNlIf "$configValue_verbose"
         done
         printf '\n%s%s%s\n\n' "$formatBold" 'Options:' "$formatReset"
@@ -395,7 +392,7 @@ case "$command" in
     version|-v)
         if checkTruthy "$configValue_verbose"; then
             git --version
-            printf "chord version %s\n" "$VERSION"
+            printf 'chord version %s\n' "$VERSION"
         else
             printf '%s\n' "$VERSION"
         fi
@@ -406,7 +403,7 @@ case "$command" in
                 if [ -z "$subcommand" ] || [ "$subcommand" = 'list' ]; then
                     filteredDefaults="$defaults"
                     if ! checkTruthy "$configValue_all"; then
-                        filteredDefaults="$( printf '%s\n' "$defaults" | fgrep '.' )"
+                        filteredDefaults="$( printf '%s\n' "$defaults" | grep -F '.' )"
                     fi
                     if checkTruthy "$configValue_verbose"; then
                         printf '%s%-40s%s%s\n' "$formatBold" 'Key:' 'Default:' "$formatReset"
@@ -449,7 +446,7 @@ case "$command" in
         if [ -z "$subcommand" ] || [ "$subcommand" = 'list' ]; then
             filteredConfig="$config"
             if ! checkTruthy "$configValue_all"; then
-                filteredConfig="$( printf '%s\n' "$config" | fgrep '.' )"
+                filteredConfig="$( printf '%s\n' "$config" | grep -F '.' )"
             fi
             if checkTruthy "$configValue_verbose"; then
                 printf '%s%-40s%-15s%s%s\n' "$formatBold" 'Key:' 'Default:' 'Value:' "$formatReset"
@@ -480,7 +477,7 @@ case "$command" in
             configNewValue="$( getNthLine "$nonOptArgs" 3 )"
             if checkTruthy "$configValue_verbose"; then
                 configOldValue="$( getConfigValue "$config" )"
-                printf "Set %s%s%s from '%s%s%s' to '%s%s%s'\n" \
+                printf 'Set %s%s%s from '%s%s%s' to '%s%s%s'\n' \
                     "$formatBold" "$configKey" "$formatReset" \
                     "$formatBold" "$configOldValue" "$formatReset" \
                     "$formatBold" "$configNewValue" "$formatReset"
