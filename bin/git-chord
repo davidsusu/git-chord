@@ -272,6 +272,19 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             printNlIf "$configValue_verbose"
             exit 0
             ;;
+        version|-v)
+            printf '%s%s%s\n\n' "$formatBold" 'git chord version' "$formatReset"
+            printNlIf "$configValue_verbose"
+            printf '%s%s%s\n' "$formatBold" 'Example:' "$formatReset"
+            printNlIf "$configValue_verbose"
+            printf '  %s\n\n' 'git chord version'
+            printNlIf "$configValue_verbose"
+            printf '%s%s%s\n' "$formatBold" 'Description:' "$formatReset"
+            printNlIf "$configValue_verbose"
+            echo '  Prints version of the git chord extension.'
+            printNlIf "$configValue_verbose"
+            exit 0
+            ;;
         # TODO
         *)
             printf '%s%s: %s%s\n' "$formatError" "ERROR: No help for subcommand" "$subcommand" "$formatReset" >&2
