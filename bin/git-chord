@@ -49,6 +49,7 @@ workingtree.apply.allowoverwrite false # Allows overwriting even a dirty working
 dryrun false # Enables dry-run mode, no modification will be applied
 verbose false # Enables verbose mode, more information will be printed
 color true # Enables color mode, ANSI escapes will be used in the output
+markdown false # Enables markdown mode, output will be formatted as a markdown document
 defaults false # Enables default mode, the default configuration will be used and printed (forcefully)
 all false # Enables the operation for all related objects
 ' | tail -n +2 )"
@@ -70,6 +71,10 @@ appendLine() { # $1: array, $2:newLine
 
 getNthLine() { # $1: lines, $2 lineNo
     printf '%s\n' "$1" | sed "${2}q;d"
+}
+
+getLength() { # $1: string
+    printf '%s' "$1" | wc -c
 }
 
 repeatChar() { # $1: char, $2: length
@@ -249,132 +254,176 @@ $( printf '%s\n' "$config" )
 EOF
 
 formatError=''
+formatErrorEnd=''
 formatWarning=''
+formatWarningEnd=''
 formatSuccess=''
+formatSuccessEnd=''
 formatInfo=''
+formatInfoEnd=''
 formatBold=''
-formatReset=''
+formatBoldEnd=''
 if checkTruthy "$configValue_color"; then
-    formatError="$( printf '\e[1;31m' )"
-    formatWarning="$( printf '\e[1;33m' )"
-    formatSuccess="$( printf '\e[1;32m' )"
-    formatInfo="$( printf '\e[1;96m' )"
-    formatBold="$( printf '\e[1m' )"
-    formatReset="$( printf '\e[0m' )"
+    if checkTruthy "$configValue_markdown"; then
+        formatError=''
+        formatErrorEnd=''
+        formatWarning=''
+        formatWarningEnd=''
+        formatSuccess=''
+        formatSuccessEnd=''
+        formatInfo=''
+        formatInfoEnd=''
+        formatBold=''
+        formatBoldEnd=''
+    else
+        formatError="$( printf '\e[1;31m' )"
+        formatErrorEnd="$( printf '\e[0m' )"
+        formatWarning="$( printf '\e[1;33m' )"
+        formatWarningEnd="$( printf '\e[0m' )"
+        formatSuccess="$( printf '\e[1;32m' )"
+        formatSuccessEnd="$( printf '\e[0m' )"
+        formatInfo="$( printf '\e[1;96m' )"
+        formatInfoEnd="$( printf '\e[0m' )"
+        formatBold="$( printf '\e[1m' )"
+        formatBoldEnd="$( printf '\e[0m' )"
+    fi
 fi
+
+printGrandTitle() {
+    if checkTruthy "$configValue_markdown"; then
+        printf '# %s\n\n' "$1"
+    else
+        echo ''
+        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd"
+        printf '%s\n\n' "$( repeatChar '=' "$( getLength "$1" )" )"
+        printNlIf "$configValue_verbose"
+    fi
+}
+
+printTitle() {
+    if checkTruthy "$configValue_markdown"; then
+        printf '# %s\n\n' "$1"
+    else
+        printNlIf "$configValue_verbose"
+        printf '%s%s%s\n\n' "$formatBold" "$1" "$formatBoldEnd"
+    fi
+}
+
+printSubtitle() {
+    if checkTruthy "$configValue_markdown"; then
+        printf '## %s\n\n' "$1"
+    else
+        printNlIf "$configValue_verbose"
+        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd"
+        printNlIf "$configValue_verbose"
+    fi
+}
+
+printParagraph() {
+    ( printf '%s ' "$@" ; echo '' ) | sed -E 's/ $//' |
+        sed -E "s/\(\*/${formatBold}/g" | sed -E "s/\*\)/${formatBoldEnd}/g" |
+        fold -w 80 -s |
+        if checkTruthy "$configValue_markdown"; then cat; else sed -E 's/^/  /'; fi
+    echo ''
+}
+
+printCodeBlock() {
+    if checkTruthy "$configValue_markdown"; then
+        printf '```\n'
+        printf '%s\n' "$@"
+        printf '```\n\n'
+    else
+        printf '%s\n' "$@" | sed -E 's/^/  /'
+        echo ''
+    fi
+}
+
+# TODO escape html special characters
+
+# TODO verbose/error messages?
 
 if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
     case "$command" in
         help|-h)
-            printf '%s%s%s\n\n' "$formatBold" 'git chord help' "$formatReset"
-            printNlIf "$configValue_verbose"
-            printf '%s%s%s\n' "$formatBold" 'Usage:' "$formatReset"
-            printNlIf "$configValue_verbose"
-            printf '  %s\n' 'git chord {-h|help} [<options...>]'
-            echo ''
-            printNlIf "$configValue_verbose"
-            printf '%s%s%s\n' "$formatBold" 'Description:' "$formatReset"
-            printNlIf "$configValue_verbose"
-            echo '  Prints information about the available subcommands and options.'
-            printNlIf "$configValue_verbose"
+            printTitle 'git chord help'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord {-h|help} [<options...>]'
+            printSubtitle 'Description:'
+            printParagraph 'Prints information about the available subcommands and options.'
             exit 0
             ;;
         version|-v)
-            printf '%s%s%s\n\n' "$formatBold" 'git chord version' "$formatReset"
-            printNlIf "$configValue_verbose"
-            printf '%s%s%s\n' "$formatBold" 'Usage:' "$formatReset"
-            printNlIf "$configValue_verbose"
-            printf '  %s\n' 'git chord {-v|version} [<options...>]'
-            echo ''
-            printNlIf "$configValue_verbose"
-            printf '%s%s%s\n' "$formatBold" 'Description:' "$formatReset"
-            printNlIf "$configValue_verbose"
-            echo '  Prints version of the git chord extension.'
-            printNlIf "$configValue_verbose"
+            printTitle 'git chord version'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord {-v|version} [<options...>]'
+            printSubtitle 'Description:'
+            printParagraph 'Prints version of the git chord extension.'
             exit 0
             ;;
         config)
-            printf '%s%s%s\n\n' "$formatBold" 'git chord config' "$formatReset"
-            printNlIf "$configValue_verbose"
-            printf '%s%s%s\n' "$formatBold" 'Usage:' "$formatReset"
-            printNlIf "$configValue_verbose"
-            printf '  %s\n' 'git chord config [list] [<options...>]'
-            printNlIf "$configValue_verbose"
-            printf '  %s\n' 'git chord config get <key> [<options...>]'
-            printNlIf "$configValue_verbose"
-            printf '  %s\n' 'git chord config set <key> <value> [<options...>]'
-            echo ''
-            printf '%s%s%s\n' "$formatBold" 'Example:' "$formatReset"
-            printNlIf "$configValue_verbose"
-            printf '  %s\n\n' 'git chord config set annotatedtags.store.enabled false'
-            printNlIf "$configValue_verbose"
-            printf '%s%s%s\n' "$formatBold" 'Description:' "$formatReset"
-            printNlIf "$configValue_verbose"
-            echo '  Prints information about the configuration of the git chord extension,'
-            echo '  or changes a configuration value for the current git repository.'
-            echo ''
-            printNlIf "$configValue_verbose"
-            printf '%s%s%s\n' "$formatBold" 'Sub-subcommands:' "$formatReset"
-            printNlIf "$configValue_verbose"
-            (
-                printf '(*list*): This is the default command. '
-                printf 'Lists all the available configuration keys and their values. '
-                printf 'Using the (*--default*) option you can see the defaults only, '
-                printf 'this option works out of git repositories too. '
-                printf 'Using the (*--all*) option you can list the ad hoc command line options too. '
-            echo '' ) | sed -E "s/\(\*/${formatBold}/g" | sed -E "s/\*\)/${formatReset}/g" | fold -w 80 -s | sed -E 's/^/  /'
-            printNlIf "$configValue_verbose"
-            (
-                printf '(*get*): Gets the value of a given configuration key. '
-                printf 'Using the (*--default*) option you can see the default value, '
-                printf 'this option works out of git repositories too. '
-            echo '' ) | sed -E "s/\(\*/${formatBold}/g" | sed -E "s/\*\)/${formatReset}/g" | fold -w 80 -s | sed -E 's/^/  /'
-            printNlIf "$configValue_verbose"
-            (
-                printf '(*set*): Changes the value of a given configuration key. '
-                printf 'You need to specify the key first, then the value. '
-                printf 'This sub-subcommand works only inside a git repository, '
-                printf 'and will save the value as a repository scoped git config '
-                printf 'using the prefix '\''(*chord.*)'\'' in the key. '
-            echo '' ) | sed -E "s/\(\*/${formatBold}/g" | sed -E "s/\*\)/${formatReset}/g" | fold -w 80 -s | sed -E 's/^/  /'
-            printNlIf "$configValue_verbose"
+            printTitle 'git chord config'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord config [list] [<options...>]'
+            printCodeBlock 'git chord config get <key> [<options...>]'
+            printCodeBlock 'git chord config set <key> <value> [<options...>]'
+            printSubtitle 'Example:'
+            printCodeBlock 'git chord config set annotatedtags.store.enabled false'
+            printSubtitle 'Description:'
+            printParagraph \
+                'Prints information about the configuration of the git chord extension,' \
+                'or changes a configuration value for the current git repository.' \
+            ;
+            printSubtitle 'Sub-subcommands:'
+            printParagraph \
+                '(*list*): This is the default command.' \
+                'Lists all the available configuration keys and their values.' \
+                'Using the (*--default*) option you can see the defaults only,' \
+                'this option works out of git repositories too.' \
+                'Using the (*--all*) option you can list the ad hoc command line options too.' \
+            ;
+            printParagraph \
+                '(*get*): Gets the value of a given configuration key.' \
+                'Using the (*--default*) option you can see the default value,' \
+                'this option works out of git repositories too.' \
+            ;
+            printParagraph \
+                '(*set*): Changes the value of a given configuration key.' \
+                'You need to specify the key first, then the value.' \
+                'This sub-subcommand works only inside a git repository,' \
+                'and will save the value as a repository scoped git config' \
+                'using the prefix '\''(*chord.*)'\'' in the key.' \
+            ;
             exit 0
             ;;
         snapshot)
-            printf '%s%s%s\n\n' "$formatBold" 'git chord snapshot' "$formatReset"
-            printNlIf "$configValue_verbose"
-            printf '%s%s%s\n' "$formatBold" 'Usage:' "$formatReset"
-            printNlIf "$configValue_verbose"
-            printf '  %s\n' 'git chord snapshot [<name>]'
-            printNlIf "$configValue_verbose"
-            printf '  %s\n' 'git chord snapshot - <branch>'
-            printNlIf "$configValue_verbose"
-            echo ''
-            printf '%s%s%s\n' "$formatBold" 'Example:' "$formatReset"
-            printNlIf "$configValue_verbose"
-            printf '  %s\n\n' 'git chord snapshot my-snapshots'
-            printNlIf "$configValue_verbose"
-            printf '%s%s%s\n' "$formatBold" 'Description:' "$formatReset"
-            printNlIf "$configValue_verbose"
-            (
-                printf 'Creates and saves a snapshot of the entire state of the repository, '
-                printf 'based on the configuration. '
-                printf 'If you use no parameters, the default tracker branch name will be used with the default prefix. '
-                printf 'If you use the (*<name>*) parameter, this branch name will be used with the default prefix. '
-                printf 'If you use the '\''(*-*)'\'' parameter, '
-                printf 'then the (*<branch>*) parameter will be interpreted as a full branch name. '
-                printf 'In any case, the tracker branch will be created if not exist. '
-                printf 'All the dependency commits (head of branches, tags, staging area state etc.) '
-                printf 'will be stored by their name and full commit hash, '
-                printf 'and all such commit hashes will be additional parents of the commit. '
-                printf 'The first parent is always the previous commit of the tracker branch, '
-                printf 'if there is no such previous commit, then an empty commit will be prepended. '
-            echo '' ) | sed -E "s/\(\*/${formatBold}/g" | sed -E "s/\*\)/${formatReset}/g" | fold -w 80 -s | sed -E 's/^/  /'
-            printNlIf "$configValue_verbose"
+            printTitle 'git chord snapshot'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord snapshot [<name>]'
+            printCodeBlock 'git chord snapshot - <branch>'
+            printSubtitle 'Example:'
+            printCodeBlock 'git chord snapshot my-snapshots'
+            printSubtitle 'Description:'
+            printParagraph \
+                'Creates and saves a snapshot of the entire state of the repository,' \
+                'based on the configuration.' \
+                'If you use no parameters, the default tracker branch name will be used with the default prefix.' \
+                'If you use the (*<name>*) parameter, this branch name will be used with the default prefix.' \
+                'If you use the '\''(*-*)'\'' parameter,' \
+                'then the (*<branch>*) parameter will be interpreted as a full branch name.' \
+                'In any case, the tracker branch will be created if not exist.' \
+            ;
+            printParagraph \
+                'All the dependency commits (head of branches, tags, staging area state etc.)' \
+                'will be stored by their name and full commit hash,' \
+                'and all such commit hashes will be additional parents of the commit.' \
+                'The first parent is always the previous commit of the tracker branch,' \
+                'if there is no such previous commit, then an empty commit will be prepended.' \
+            ;
+            exit 0
             ;;
         # TODO
         *)
-            printf '%s%s: %s%s\n' "$formatError" "ERROR: No help for subcommand" "$subcommand" "$formatReset" >&2
+            printf '%s%s: %s%s\n' "$formatError" "ERROR: No help for subcommand" "$subcommand" "$formatBoldEnd" >&2
             exit 1
             ;;
     esac
@@ -382,30 +431,31 @@ fi
 
 case "$command" in
     help|-h)
+        # TODO use the printing commands
         helpTitle='HELP for Git Chord:'
-        printf '\n%s%s%s\n' "$formatBold" "$helpTitle" "$formatReset"
-        printf '%s\n' "${formatBold}$( repeatChar '=' "$( printf '%s' "$helpTitle" | wc -c )" )${formatReset}"
+        printf '\n%s%s%s\n' "$formatBold" "$helpTitle" "$formatBoldEnd"
+        printf '%s\n' "${formatBold}$( repeatChar '=' "$( printf '%s\n' "$helpTitle" | wc -c )" )${formatBoldEnd}"
         printNlIf "$configValue_verbose"
-        printf '\n%s%s%s\n' "$formatBold" 'Usage:' "$formatReset"
+        printf '\n%s%s%s\n' "$formatBold" 'Usage:' "$formatBoldEnd"
         printNlIf "$configValue_verbose"
         printf '  %s\n' 'git chord [<subcommand>] [<options...>]'
         if checkTruthy "$configValue_verbose"; then
-            printf '\n\n%s%s%s\n\n' "$formatBold" 'Example:' "$formatReset"
+            printf '\n\n%s%s%s\n\n' "$formatBold" 'Example:' "$formatBoldEnd"
             printf '  %s\n' 'git chord snapshot --verbose'
             echo ''
         fi
-        printf '\n%s%s%s\n\n' "$formatBold" 'Subcommands:' "$formatReset"
+        printf '\n%s%s%s\n\n' "$formatBold" 'Subcommands:' "$formatBoldEnd"
         commandNames="$( printf '%s\n'  "$COMMANDS" | cut -d ' ' -f 1 )"
         commandComments="$( printf '%s\n'  "$COMMANDS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
         commandI=0
         printf '%s\n' "$commandNames" | while IFS= read -r commandName; do
             commandI=$(( commandI + 1 ))
-            commandComment="$( getNthLine "$commandComments" "$commandI" | sed -E "s/\(\*/${formatBold}/" | sed -E "s/\*\)/${formatReset}/" )"
-            printf '  %s%s%s\n' "$formatBold" "$commandName" "$formatReset"
+            commandComment="$( getNthLine "$commandComments" "$commandI" | sed -E "s/\(\*/${formatBold}/" | sed -E "s/\*\)/${formatBoldEnd}/" )"
+            printf '  %s%s%s\n' "$formatBold" "$commandName" "$formatBoldEnd"
             printf '    %s\n' "$commandComment"
             printNlIf "$configValue_verbose"
         done
-        printf '\n%s%s%s\n\n' "$formatBold" 'Options:' "$formatReset"
+        printf '\n%s%s%s\n\n' "$formatBold" 'Options:' "$formatBoldEnd"
         configKeys="$( printf '%s\n'  "$defaults" | cut -d ' ' -f 1 )"
         defaultValues="$( printf '%s\n'  "$defaults" | cut -d ' ' -f 2- )"
         configComments="$( printf '%s\n'  "$OPTIONS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
@@ -423,20 +473,21 @@ case "$command" in
             
             if checkTruthy "$configValue_verbose"; then
                 printf '  %s%-41s%s%sBuilt-in default: %s%s\n      %s\n\n' \
-                    "$formatBold" "$optionName" "$formatReset" "$formatInfo" "$defaultValue" "$formatReset" "$configComment"
+                    "$formatBold" "$optionName" "$formatBoldEnd" "$formatInfo" "$defaultValue" "$formatBoldEnd" "$configComment"
             else
                 printf '  %s%-41s%s\n      %s\n' \
-                    "$formatBold" "$optionName" "$formatReset" "$configComment"
+                    "$formatBold" "$optionName" "$formatBoldEnd" "$configComment"
             fi
         done
-        printf '\n%s%s%s\n\n' "$formatBold" 'Exit statuses:' "$formatReset"
-        printf '  %s0%s - in case of success\n' "$formatBold" "$formatReset"
-        printf '  %s1%s - in case of error\n' "$formatBold" "$formatReset"
-        printf '  %s2%s - if the action was aborted due to dryrun mode\n' "$formatBold" "$formatReset"
+        printf '\n%s%s%s\n\n' "$formatBold" 'Exit statuses:' "$formatBoldEnd"
+        printf '  %s0%s - in case of success\n' "$formatBold" "$formatBoldEnd"
+        printf '  %s1%s - in case of error\n' "$formatBold" "$formatBoldEnd"
+        printf '  %s2%s - if the action was aborted due to dryrun mode\n' "$formatBold" "$formatBoldEnd"
         printNlIf "$configValue_verbose"
         exit 0
         ;;
     version|-v)
+        # TODO use the printing commands
         if checkTruthy "$configValue_verbose"; then
             git --version
             printf 'chord version %s\n' "$VERSION"
@@ -446,58 +497,60 @@ case "$command" in
         exit 0
         ;;
     config)
-            if checkTruthy "$configValue_defaults"; then
-                if [ -z "$subcommand" ] || [ "$subcommand" = 'list' ]; then
-                    filteredDefaults="$defaults"
-                    if ! checkTruthy "$configValue_all"; then
-                        filteredDefaults="$( printf '%s\n' "$defaults" | grep -F '.' )"
-                    fi
-                    if checkTruthy "$configValue_verbose"; then
-                        printf '%s%-40s%s%s\n' "$formatBold" 'Key:' 'Default:' "$formatReset"
-                        printf '%s%s %s%s\n' "$formatBold" "$( repeatChar '=' 39 )" "$( repeatChar '=' 15 )" "$formatReset"
-                        echo ''
-                        printf '%s\n' "$filteredDefaults" | while IFS= read -r line; do
-                            configKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
-                            configDefaultValue="$( printf '%s\n' "$line" | cut -d ' ' -f 2- )"
-                            printf '%-40s%s\n' "$configKey" "$configDefaultValue"
-                        done
-                    else
-                        printf '%s\n' "$filteredDefaults"
-                    fi
-                    exit 0
-                elif [ "$subcommand" = 'get' ]; then
-                    configKey="$( getNthLine "$nonOptArgs" 2 )"
-                    configDefaultValue="$( getConfigValue "$defaults" "$configKey" )"
-                    if checkTruthy "$configValue_verbose"; then
-                        printf 'Key:     %s%s%s\n' "$formatBold" "$configKey" "$formatReset"
-                        printf 'Default: %s%s%s\n' "$formatBold" "$configDefaultValue" "$formatReset"
-                    else
-                        printf '%s\n' "$configDefaultValue"
-                    fi
-                    exit 0
-                elif [ "$subcommand" = 'set' ]; then
-                    printf '%sERROR: Default value can not be changed%s\n' "$formatError" "$formatReset" >&2
-                    exit 1
+        # TODO use the printing commands
+        if checkTruthy "$configValue_defaults"; then
+            if [ -z "$subcommand" ] || [ "$subcommand" = 'list' ]; then
+                filteredDefaults="$defaults"
+                if ! checkTruthy "$configValue_all"; then
+                    filteredDefaults="$( printf '%s\n' "$defaults" | grep -F '.' )"
                 fi
+                if checkTruthy "$configValue_verbose"; then
+                    printf '%s%-40s%s%s\n' "$formatBold" 'Key:' 'Default:' "$formatBoldEnd"
+                    printf '%s%s %s%s\n' "$formatBold" "$( repeatChar '=' 39 )" "$( repeatChar '=' 15 )" "$formatBoldEnd"
+                    echo ''
+                    printf '%s\n' "$filteredDefaults" | while IFS= read -r line; do
+                        configKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
+                        configDefaultValue="$( printf '%s\n' "$line" | cut -d ' ' -f 2- )"
+                        printf '%-40s%s\n' "$configKey" "$configDefaultValue"
+                    done
+                else
+                    printf '%s\n' "$filteredDefaults"
+                fi
+                exit 0
+            elif [ "$subcommand" = 'get' ]; then
+                configKey="$( getNthLine "$nonOptArgs" 2 )"
+                configDefaultValue="$( getConfigValue "$defaults" "$configKey" )"
+                if checkTruthy "$configValue_verbose"; then
+                    printf 'Key:     %s%s%s\n' "$formatBold" "$configKey" "$formatBoldEnd"
+                    printf 'Default: %s%s%s\n' "$formatBold" "$configDefaultValue" "$formatBoldEnd"
+                else
+                    printf '%s\n' "$configDefaultValue"
+                fi
+                exit 0
+            elif [ "$subcommand" = 'set' ]; then
+                printf '%sERROR: Default value can not be changed%s\n' "$formatError" "$formatBoldEnd" >&2
+                exit 1
             fi
+        fi
         ;;
 esac
 
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
-    printf '%sERROR: Not a git repository%s\n' "$formatError" "$formatReset" >&2
+    printf '%sERROR: Not a git repository%s\n' "$formatError" "$formatBoldEnd" >&2
     exit 1
 fi
 
 case "$command" in
     config)
         if [ -z "$subcommand" ] || [ "$subcommand" = 'list' ]; then
+            # TODO use the printing commands
             filteredConfig="$config"
             if ! checkTruthy "$configValue_all"; then
                 filteredConfig="$( printf '%s\n' "$config" | grep -F '.' )"
             fi
             if checkTruthy "$configValue_verbose"; then
-                printf '%s%-40s%-15s%s%s\n' "$formatBold" 'Key:' 'Default:' 'Value:' "$formatReset"
-                printf '%s%s %s %s%s\n' "$formatBold" "$( repeatChar '=' 39 )" "$( repeatChar '=' 14 )" "$( repeatChar '=' 20 )" "$formatReset"
+                printf '%s%-40s%-15s%s%s\n' "$formatBold" 'Key:' 'Default:' 'Value:' "$formatBoldEnd"
+                printf '%s%s %s %s%s\n' "$formatBold" "$( repeatChar '=' 39 )" "$( repeatChar '=' 14 )" "$( repeatChar '=' 20 )" "$formatBoldEnd"
                 echo ''
                 printf '%s\n' "$filteredConfig" | while IFS= read -r line; do
                     configKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
@@ -509,13 +562,14 @@ case "$command" in
                 printf '%s\n' "$filteredConfig"
             fi
         elif [ "$subcommand" = 'get' ]; then
+            # TODO use the printing commands
             configKey="$( getNthLine "$nonOptArgs" 2 )"
             configDefaultValue="$( getConfigValue "$defaults" "$configKey" )"
             configValue="$( getConfigValue "$config" "$configKey" )"
             if checkTruthy "$configValue_verbose"; then
-                printf 'Key:     %s%s%s\n' "$formatBold" "$configKey" "$formatReset"
-                printf 'Default: %s%s%s\n' "$formatBold" "$configDefaultValue" "$formatReset"
-                printf 'Value:   %s%s%s\n' "$formatBold" "$configValue" "$formatReset"
+                printf 'Key:     %s%s%s\n' "$formatBold" "$configKey" "$formatBoldEnd"
+                printf 'Default: %s%s%s\n' "$formatBold" "$configDefaultValue" "$formatBoldEnd"
+                printf 'Value:   %s%s%s\n' "$formatBold" "$configValue" "$formatBoldEnd"
             else
                 printf '%s\n' "$configValue"
             fi
@@ -525,19 +579,19 @@ case "$command" in
             if checkTruthy "$configValue_verbose"; then
                 configOldValue="$( getConfigValue "$config" )"
                 printf 'Set %s%s%s from '\''%s%s%s' to '\''%s%s%s'\''\n' \
-                    "$formatBold" "$configKey" "$formatReset" \
-                    "$formatBold" "$configOldValue" "$formatReset" \
-                    "$formatBold" "$configNewValue" "$formatReset"
+                    "$formatBold" "$configKey" "$formatBoldEnd" \
+                    "$formatBold" "$configOldValue" "$formatBoldEnd" \
+                    "$formatBold" "$configNewValue" "$formatBoldEnd"
             fi
             if checkTruthy "$configValue_dryrun"; then
                 exit 2
             fi
             if ! git config "chord.${configKey}" "$configNewValue"; then
-                printf '%sERROR: Failed to set value%s\n' "$formatError" "$formatReset" >&2
+                printf '%sERROR: Failed to set value%s\n' "$formatError" "$formatBoldEnd" >&2
                 exit 1
             fi
         else
-            printf '%sERROR: Unknown subcommand of config: %s%s\n' "$formatError" "$subcommand" "$formatReset" >&2
+            printf '%sERROR: Unknown subcommand of config: %s%s\n' "$formatError" "$subcommand" "$formatBoldEnd" >&2
             exit 1
         fi
         exit 0
