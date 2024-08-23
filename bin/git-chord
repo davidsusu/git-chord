@@ -585,7 +585,7 @@ case "$command" in
             configNewValue="$( getNthLine "$nonOptArgs" 3 )"
             if checkTruthy "$configValue_verbose"; then
                 configOldValue="$( getConfigValue "$config" )"
-                printf 'Set %s%s%s from '\''%s%s%s' to '\''%s%s%s'\''\n' \
+                printf 'Set %s%s%s from '\''%s%s%s'\'' to '\''%s%s%s'\''\n' \
                     "$formatBold" "$configKey" "$formatBoldEnd" \
                     "$formatBold" "$configOldValue" "$formatBoldEnd" \
                     "$formatBold" "$configNewValue" "$formatBoldEnd"
