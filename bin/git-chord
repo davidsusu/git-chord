@@ -3,21 +3,21 @@
 VERSION='0.1.0-SNAPSHOT'
 
 COMMANDS="$( printf '%s' '
-help # Prints help (also works: <-h>)
-version # Prints version of the chord extension (also works: <-v>)
-config # Prints the current chord configuration (use <--defaults> to see the defaults)
+help # Prints help (also works: (*-h*))
+version # Prints version of the chord extension (also works: (*-v*))
+config # Prints the current chord configuration (use (*--defaults*) to see the defaults)
 snapshot # Creates a snapshot of the repository state
 apply # Applies a previously saved snapshot to the repository
-show # Shows full data of a previously saved snapshot (or using <--all>: all chord branches)
-push # Pushes the default chord branch (or using <--all>: all chord branches)
-pull # Pulls the default chord branch (or using <--all>: all chord branches)
+show # Shows full data of a previously saved snapshot (or using (*--all*): all chord branches)
+push # Pushes the default chord branch (or using (*--all*): all chord branches)
+pull # Pulls the default chord branch (or using (*--all*): all chord branches)
 ' | tail -n +2 )"
 
 DEFAULT_COMMAND='snapshot'
 
 OPTIONS="$( printf '%s' '
 trackers.prefix chord/ # Sets the tracker branch prefix
-trackers.default main # Sets the tracker branch name
+trackers.default main # Sets the default tracker branch name
 trackers.remotes.default origin # Sets the default remote name for tracker branches
 trackers.remotes.allowautoadd true # Allows automatically adding the default remote if necessary
 branches.store.enabled true # Enables saving state of tracked branches
@@ -268,9 +268,10 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
         help|-h)
             printf '%s%s%s\n\n' "$formatBold" 'git chord help' "$formatReset"
             printNlIf "$configValue_verbose"
-            printf '%s%s%s\n' "$formatBold" 'Example:' "$formatReset"
+            printf '%s%s%s\n' "$formatBold" 'Usage:' "$formatReset"
             printNlIf "$configValue_verbose"
-            printf '  %s\n\n' 'git chord help'
+            printf '  %s\n' 'git chord {-h|help} [<options...>]'
+            echo ''
             printNlIf "$configValue_verbose"
             printf '%s%s%s\n' "$formatBold" 'Description:' "$formatReset"
             printNlIf "$configValue_verbose"
@@ -281,9 +282,10 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
         version|-v)
             printf '%s%s%s\n\n' "$formatBold" 'git chord version' "$formatReset"
             printNlIf "$configValue_verbose"
-            printf '%s%s%s\n' "$formatBold" 'Example:' "$formatReset"
+            printf '%s%s%s\n' "$formatBold" 'Usage:' "$formatReset"
             printNlIf "$configValue_verbose"
-            printf '  %s\n\n' 'git chord version'
+            printf '  %s\n' 'git chord {-v|version} [<options...>]'
+            echo ''
             printNlIf "$configValue_verbose"
             printf '%s%s%s\n' "$formatBold" 'Description:' "$formatReset"
             printNlIf "$configValue_verbose"
@@ -294,6 +296,14 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
         config)
             printf '%s%s%s\n\n' "$formatBold" 'git chord config' "$formatReset"
             printNlIf "$configValue_verbose"
+            printf '%s%s%s\n' "$formatBold" 'Usage:' "$formatReset"
+            printNlIf "$configValue_verbose"
+            printf '  %s\n' 'git chord config [list] [<options...>]'
+            printNlIf "$configValue_verbose"
+            printf '  %s\n' 'git chord config get <key> [<options...>]'
+            printNlIf "$configValue_verbose"
+            printf '  %s\n' 'git chord config set <key> <value> [<options...>]'
+            echo ''
             printf '%s%s%s\n' "$formatBold" 'Example:' "$formatReset"
             printNlIf "$configValue_verbose"
             printf '  %s\n\n' 'git chord config set annotatedtags.store.enabled false'
@@ -307,28 +317,60 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             printf '%s%s%s\n' "$formatBold" 'Sub-subcommands:' "$formatReset"
             printNlIf "$configValue_verbose"
             (
-                printf '<list>: This is the default command. '
+                printf '(*list*): This is the default command. '
                 printf 'Lists all the available configuration keys and their values. '
-                printf 'Using the <--default> option you can see the defaults only, '
+                printf 'Using the (*--default*) option you can see the defaults only, '
                 printf 'this option works out of git repositories too. '
-                printf 'Using the <--all> option you can list the ad hoc command line options too.'
-            echo '' ) | sed -E "s/</${formatBold}/" | sed -E "s/>/${formatReset}/" | fold -w 80 -s | sed -E 's/^/  /'
+                printf 'Using the (*--all*) option you can list the ad hoc command line options too. '
+            echo '' ) | sed -E "s/\(\*/${formatBold}/g" | sed -E "s/\*\)/${formatReset}/g" | fold -w 80 -s | sed -E 's/^/  /'
             printNlIf "$configValue_verbose"
             (
-                printf '<get>: Gets the value of a given configuration key. '
-                printf 'Using the <--default> option you can see the default value, '
+                printf '(*get*): Gets the value of a given configuration key. '
+                printf 'Using the (*--default*) option you can see the default value, '
                 printf 'this option works out of git repositories too. '
-            echo '' ) | sed -E "s/</${formatBold}/" | sed -E "s/>/${formatReset}/" | fold -w 80 -s | sed -E 's/^/  /'
+            echo '' ) | sed -E "s/\(\*/${formatBold}/g" | sed -E "s/\*\)/${formatReset}/g" | fold -w 80 -s | sed -E 's/^/  /'
             printNlIf "$configValue_verbose"
             (
-                printf '<set>: Changes the value of a given configuration key. '
+                printf '(*set*): Changes the value of a given configuration key. '
                 printf 'You need to specify the key first, then the value. '
                 printf 'This sub-subcommand works only inside a git repository, '
                 printf 'and will save the value as a repository scoped git config '
-                printf 'using the prefix '\''<chord.>'\'' in the key.'
-            echo '' ) | sed -E "s/</${formatBold}/" | sed -E "s/>/${formatReset}/" | fold -w 80 -s | sed -E 's/^/  /'
+                printf 'using the prefix '\''(*chord.*)'\'' in the key. '
+            echo '' ) | sed -E "s/\(\*/${formatBold}/g" | sed -E "s/\*\)/${formatReset}/g" | fold -w 80 -s | sed -E 's/^/  /'
             printNlIf "$configValue_verbose"
             exit 0
+            ;;
+        snapshot)
+            printf '%s%s%s\n\n' "$formatBold" 'git chord snapshot' "$formatReset"
+            printNlIf "$configValue_verbose"
+            printf '%s%s%s\n' "$formatBold" 'Usage:' "$formatReset"
+            printNlIf "$configValue_verbose"
+            printf '  %s\n' 'git chord snapshot [<name>]'
+            printNlIf "$configValue_verbose"
+            printf '  %s\n' 'git chord snapshot - <branch>'
+            printNlIf "$configValue_verbose"
+            echo ''
+            printf '%s%s%s\n' "$formatBold" 'Example:' "$formatReset"
+            printNlIf "$configValue_verbose"
+            printf '  %s\n\n' 'git chord snapshot my-snapshots'
+            printNlIf "$configValue_verbose"
+            printf '%s%s%s\n' "$formatBold" 'Description:' "$formatReset"
+            printNlIf "$configValue_verbose"
+            (
+                printf 'Creates and saves a snapshot of the entire state of the repository, '
+                printf 'based on the configuration. '
+                printf 'If you use no parameters, the default tracker branch name will be used with the default prefix. '
+                printf 'If you use the (*<name>*) parameter, this branch name will be used with the default prefix. '
+                printf 'If you use the '\''(*-*)'\'' parameter, '
+                printf 'then the (*<branch>*) parameter will be interpreted as a full branch name. '
+                printf 'In any case, the tracker branch will be created if not exist. '
+                printf 'All the dependency commits (head of branches, tags, staging area state etc.) '
+                printf 'will be stored by their name and full commit hash, '
+                printf 'and all such commit hashes will be additional parents of the commit. '
+                printf 'The first parent is always the previous commit of the tracker branch, '
+                printf 'if there is no such previous commit, then an empty commit will be prepended. '
+            echo '' ) | sed -E "s/\(\*/${formatBold}/g" | sed -E "s/\*\)/${formatReset}/g" | fold -w 80 -s | sed -E 's/^/  /'
+            printNlIf "$configValue_verbose"
             ;;
         # TODO
         *)
@@ -349,7 +391,7 @@ case "$command" in
         printf '  %s\n' 'git chord [<subcommand>] [<options...>]'
         if checkTruthy "$configValue_verbose"; then
             printf '\n\n%s%s%s\n\n' "$formatBold" 'Example:' "$formatReset"
-            printf '  %s\n' 'git chord push --trackers-remotes-allowautoadd --all --verbose'
+            printf '  %s\n' 'git chord snapshot --verbose'
             echo ''
         fi
         printf '\n%s%s%s\n\n' "$formatBold" 'Subcommands:' "$formatReset"
@@ -358,7 +400,7 @@ case "$command" in
         commandI=0
         printf '%s\n' "$commandNames" | while IFS= read -r commandName; do
             commandI=$(( commandI + 1 ))
-            commandComment="$( getNthLine "$commandComments" "$commandI" | sed -E "s/</${formatBold}/" | sed -E "s/>/${formatReset}/" )"
+            commandComment="$( getNthLine "$commandComments" "$commandI" | sed -E "s/\(\*/${formatBold}/" | sed -E "s/\*\)/${formatReset}/" )"
             printf '  %s%s%s\n' "$formatBold" "$commandName" "$formatReset"
             printf '    %s\n' "$commandComment"
             printNlIf "$configValue_verbose"
@@ -387,6 +429,11 @@ case "$command" in
                     "$formatBold" "$optionName" "$formatReset" "$configComment"
             fi
         done
+        printf '\n%s%s%s\n\n' "$formatBold" 'Exit statuses:' "$formatReset"
+        printf '  %s0%s - in case of success\n' "$formatBold" "$formatReset"
+        printf '  %s1%s - in case of error\n' "$formatBold" "$formatReset"
+        printf '  %s2%s - if the action was aborted due to dryrun mode\n' "$formatBold" "$formatReset"
+        printNlIf "$configValue_verbose"
         exit 0
         ;;
     version|-v)
@@ -482,11 +529,34 @@ case "$command" in
                     "$formatBold" "$configOldValue" "$formatReset" \
                     "$formatBold" "$configNewValue" "$formatReset"
             fi
+            if checkTruthy "$configValue_dryrun"; then
+                exit 2
+            fi
             if ! git config "chord.${configKey}" "$configNewValue"; then
                 printf '%sERROR: Failed to set value%s\n' "$formatError" "$formatReset" >&2
                 exit 1
             fi
+        else
+            printf '%sERROR: Unknown subcommand of config: %s%s\n' "$formatError" "$subcommand" "$formatReset" >&2
+            exit 1
         fi
+        exit 0
+        ;;
+    snapshot)
+        
+        # TODO
+        #trackers.prefix chord/ # Sets the tracker branch prefix
+        #trackers.default main # Sets the tracker branch name
+        #branches.store.enabled true # Enables saving state of tracked branches
+        #branches.store.regex .* # Sets the regex pattern for saving tracked branches
+        #annotatedtags.store.enabled true # Enables saving state of tracked annotated tags
+        #annotatedtags.store.regex .* # Sets the regex pattern for saving tracked annotated tags
+        #lightweighttags.store.enabled false # Enables saving state of tracked lightweight tags
+        #lightweighttags.store.regex .* # Sets the regex pattern for saving tracked lightweight tags
+        #head.store.enabled true # Enables saving state of the HEAD
+        #stagingarea.store.enabled false # Enables saving state of the staging area
+        #workingtree.store.enabled false # Enables saving the state of the working tree
+
         exit 0
         ;;
 esac
