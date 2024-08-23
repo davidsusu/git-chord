@@ -263,18 +263,22 @@ formatInfo=''
 formatInfoEnd=''
 formatBold=''
 formatBoldEnd=''
+formatCode=''
+formatCodeEnd=''
 if checkTruthy "$configValue_color"; then
     if checkTruthy "$configValue_markdown"; then
-        formatError=''
-        formatErrorEnd=''
+        formatError='**'
+        formatErrorEnd='**'
         formatWarning=''
         formatWarningEnd=''
         formatSuccess=''
         formatSuccessEnd=''
         formatInfo=''
         formatInfoEnd=''
-        formatBold=''
-        formatBoldEnd=''
+        formatBold='**'
+        formatBoldEnd='**'
+        formatCode='`'
+        formatCodeEnd='`'
     else
         formatError="$( printf '\e[1;31m' )"
         formatErrorEnd="$( printf '\e[0m' )"
@@ -286,6 +290,8 @@ if checkTruthy "$configValue_color"; then
         formatInfoEnd="$( printf '\e[0m' )"
         formatBold="$( printf '\e[1m' )"
         formatBoldEnd="$( printf '\e[0m' )"
+        formatCode="$( printf '\e[1m' )"
+        formatCodeEnd="$( printf '\e[0m' )"
     fi
 fi
 
@@ -322,6 +328,7 @@ printSubtitle() {
 printParagraph() {
     ( printf '%s ' "$@" ; echo '' ) | sed -E 's/ $//' |
         sed -E "s/\(\*/${formatBold}/g" | sed -E "s/\*\)/${formatBoldEnd}/g" |
+        sed -E "s/\(\`/${formatCode}/g" | sed -E "s/\`\)/${formatCodeEnd}/g" |
         fold -w 80 -s |
         if checkTruthy "$configValue_markdown"; then cat; else sed -E 's/^/  /'; fi
     echo ''
@@ -377,13 +384,13 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             printParagraph \
                 '(*list*): This is the default command.' \
                 'Lists all the available configuration keys and their values.' \
-                'Using the (*--default*) option you can see the defaults only,' \
+                'Using the (`--default`) option you can see the defaults only,' \
                 'this option works out of git repositories too.' \
-                'Using the (*--all*) option you can list the ad hoc command line options too.' \
+                'Using the (`--all`) option you can list the ad hoc command line options too.' \
             ;
             printParagraph \
                 '(*get*): Gets the value of a given configuration key.' \
-                'Using the (*--default*) option you can see the default value,' \
+                'Using the (`--default`) option you can see the default value,' \
                 'this option works out of git repositories too.' \
             ;
             printParagraph \
@@ -391,7 +398,7 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 'You need to specify the key first, then the value.' \
                 'This sub-subcommand works only inside a git repository,' \
                 'and will save the value as a repository scoped git config' \
-                'using the prefix '\''(*chord.*)'\'' in the key.' \
+                'using the prefix '\''(`chord.`)'\'' in the key.' \
             ;
             exit 0
             ;;
@@ -407,9 +414,9 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 'Creates and saves a snapshot of the entire state of the repository,' \
                 'based on the configuration.' \
                 'If you use no parameters, the default tracker branch name will be used with the default prefix.' \
-                'If you use the (*<name>*) parameter, this branch name will be used with the default prefix.' \
-                'If you use the '\''(*-*)'\'' parameter,' \
-                'then the (*<branch>*) parameter will be interpreted as a full branch name.' \
+                'If you use the (`<name>`) parameter, this branch name will be used with the default prefix.' \
+                'If you use the '\''(`-`)'\'' parameter,' \
+                'then the (`<branch>`) parameter will be interpreted as a full branch name.' \
                 'In any case, the tracker branch will be created if not exist.' \
             ;
             printParagraph \
