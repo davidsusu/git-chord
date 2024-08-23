@@ -411,8 +411,7 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             printCodeBlock 'git chord snapshot my-snapshots'
             printSubtitle 'Description:'
             printParagraph \
-                'Creates and saves a snapshot of the entire state of the repository,' \
-                'based on the configuration.' \
+                'Creates and saves a snapshot of the entire state of the repository, based on the configuration.' \
                 'If you use no parameters, the default tracker branch name will be used with the default prefix.' \
                 'If you use the (`<name>`) parameter, this branch name will be used with the default prefix.' \
                 'If you use the '\''(`-`)'\'' parameter,' \
