@@ -420,11 +420,12 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 'In any case, the tracker branch will be created if not exist.' \
             ;
             printParagraph \
-                'All the dependency commits (head of branches, tags, staging area state etc.)' \
+                'All the dependency commits (heads of branches, tags, staging area state etc.)' \
                 'will be stored by their name and full commit hash,' \
                 'and all such commit hashes will be additional parents of the commit.' \
                 'The first parent is always the previous commit of the tracker branch,' \
                 'if there is no such previous commit, then an empty commit will be prepended.' \
+                'You can inspect the snapshot history by following the first-parent history.' \
             ;
             exit 0
             ;;
