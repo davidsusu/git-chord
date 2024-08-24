@@ -2,6 +2,7 @@
 
 VERSION='0.1.0-SNAPSHOT'
 
+# TODO diff, state
 COMMANDS="$( printf '%s' '
 help # Prints help (also works: (*-h*))
 version # Prints version of the chord extension (also works: (*-v*))
@@ -486,8 +487,11 @@ case "$command" in
         exit 0
         ;;
     version|-v)
-        # TODO use the printing commands
-        if checkTruthy "$configValue_verbose"; then
+        if checkTruthy "$configValue_markdown"; then
+            printTitle 'Version information'
+            printParagraph "Git version: (\`$( git --version | sed -E 's/.* //' )\`)"
+            printParagraph "Chord version: (\`${VERSION}\`)"
+        elif checkTruthy "$configValue_verbose"; then
             git --version
             printf 'chord version %s\n' "$VERSION"
         else
