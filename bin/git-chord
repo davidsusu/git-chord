@@ -438,31 +438,24 @@ fi
 
 case "$command" in
     help|-h)
-        # TODO use the printing commands
-        helpTitle='HELP for Git Chord:'
-        printf '\n%s%s%s\n' "$formatBold" "$helpTitle" "$formatBoldEnd"
-        printf '%s\n' "${formatBold}$( repeatChar '=' "$( printf '%s\n' "$helpTitle" | wc -c )" )${formatBoldEnd}"
-        printNlIf "$configValue_verbose"
-        printf '\n%s%s%s\n' "$formatBold" 'Usage:' "$formatBoldEnd"
-        printNlIf "$configValue_verbose"
-        printf '  %s\n' 'git chord [<subcommand>] [<options...>]'
-        if checkTruthy "$configValue_verbose"; then
-            printf '\n\n%s%s%s\n\n' "$formatBold" 'Example:' "$formatBoldEnd"
-            printf '  %s\n' 'git chord snapshot --verbose'
-            echo ''
-        fi
-        printf '\n%s%s%s\n\n' "$formatBold" 'Subcommands:' "$formatBoldEnd"
+        printGrandTitle 'HELP for Git Chord'
+        printSubtitle 'Usage:'
+        printCodeBlock 'git chord <subcommand> [<arguments...>] [<options...>]'
+        printSubtitle 'Example:'
+        printCodeBlock 'git chord snapshot --verbose'
+        printSubtitle 'Subcommands:'
         commandNames="$( printf '%s\n'  "$COMMANDS" | cut -d ' ' -f 1 )"
         commandComments="$( printf '%s\n'  "$COMMANDS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
         commandI=0
         printf '%s\n' "$commandNames" | while IFS= read -r commandName; do
             commandI=$(( commandI + 1 ))
             commandComment="$( getNthLine "$commandComments" "$commandI" | sed -E "s/\(\*/${formatBold}/" | sed -E "s/\*\)/${formatBoldEnd}/" )"
+            # TODO: use printing commands
             printf '  %s%s%s\n' "$formatBold" "$commandName" "$formatBoldEnd"
             printf '    %s\n' "$commandComment"
             printNlIf "$configValue_verbose"
         done
-        printf '\n%s%s%s\n\n' "$formatBold" 'Options:' "$formatBoldEnd"
+        printSubtitle 'Options:'
         configKeys="$( printf '%s\n'  "$defaults" | cut -d ' ' -f 1 )"
         defaultValues="$( printf '%s\n'  "$defaults" | cut -d ' ' -f 2- )"
         configComments="$( printf '%s\n'  "$OPTIONS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
@@ -477,7 +470,7 @@ case "$command" in
                 configComment="$( printf '%s\n' "$configComment" | sed -E 's/ /\/disables /' )"
             fi
             optionName="${optionPrefix}$( printf '%s\n' "$configKey" | tr '.' '-' )"
-            
+            # TODO: use printing commands
             if checkTruthy "$configValue_verbose"; then
                 printf '  %s%-41s%s%sBuilt-in default: %s%s\n      %s\n\n' \
                     "$formatBold" "$optionName" "$formatBoldEnd" "$formatInfo" "$defaultValue" "$formatBoldEnd" "$configComment"
@@ -486,11 +479,10 @@ case "$command" in
                     "$formatBold" "$optionName" "$formatBoldEnd" "$configComment"
             fi
         done
-        printf '\n%s%s%s\n\n' "$formatBold" 'Exit statuses:' "$formatBoldEnd"
-        printf '  %s0%s - in case of success\n' "$formatBold" "$formatBoldEnd"
-        printf '  %s1%s - in case of error\n' "$formatBold" "$formatBoldEnd"
-        printf '  %s2%s - if the action was aborted due to dryrun mode\n' "$formatBold" "$formatBoldEnd"
-        printNlIf "$configValue_verbose"
+        printSubtitle 'Exit statuses:'
+        printParagraph '(*0*) - in case of success'
+        printParagraph '(*1*) - in case of error'
+        printParagraph '(*2*) - if the action was aborted due to dryrun mode'
         exit 0
         ;;
     version|-v)
