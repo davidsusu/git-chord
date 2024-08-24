@@ -2,7 +2,7 @@
 
 VERSION='0.1.0-SNAPSHOT'
 
-# TODO diff, state
+# TODO diff, state (etc.)
 COMMANDS="$( printf '%s' '
 help # Prints help (also works: (*-h*))
 version # Prints version of the chord extension (also works: (*-v*))
@@ -296,12 +296,17 @@ if checkTruthy "$configValue_color"; then
     fi
 fi
 
+escapeHtml() {
+    # TODO? keep between inline code block...
+    sed -E 's/&/\&amp;/g; s/"/\&quot;/g; s/</\&lt;/g; s/>/\&gt;/g'
+}
+
 printGrandTitle() {
     if checkTruthy "$configValue_markdown"; then
-        printf '# %s\n\n' "$1"
+        printf '# %s\n\n' "$1" | escapeHtml
     else
         echo ''
-        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd"
+        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd" | escapeHtml
         printf '%s\n\n' "$( repeatChar '=' "$( getLength "$1" )" )"
         printNlIf "$configValue_verbose"
     fi
@@ -309,29 +314,31 @@ printGrandTitle() {
 
 printTitle() {
     if checkTruthy "$configValue_markdown"; then
-        printf '# %s\n\n' "$1"
+        printf '# %s\n\n' "$1" | escapeHtml
     else
         printNlIf "$configValue_verbose"
-        printf '%s%s%s\n\n' "$formatBold" "$1" "$formatBoldEnd"
+        printf '%s%s%s\n\n' "$formatBold" "$1" "$formatBoldEnd" | escapeHtml
     fi
 }
 
 printSubtitle() {
     if checkTruthy "$configValue_markdown"; then
-        printf '## %s\n\n' "$1"
+        printf '## %s\n\n' "$1" | escapeHtml
     else
         printNlIf "$configValue_verbose"
-        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd"
+        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd" | escapeHtml
         printNlIf "$configValue_verbose"
     fi
 }
 
 printParagraph() {
     ( printf '%s ' "$@" ; echo '' ) | sed -E 's/ $//' |
-        sed -E "s/\(\*/${formatBold}/g" | sed -E "s/\*\)/${formatBoldEnd}/g" |
-        sed -E "s/\(\`/${formatCode}/g" | sed -E "s/\`\)/${formatCodeEnd}/g" |
-        fold -w 80 -s |
-        if checkTruthy "$configValue_markdown"; then cat; else sed -E 's/^/  /'; fi
+        sed -E "s/\(\*/${formatBold}/g; s/\*\)/${formatBoldEnd}/g; s/\(\`/${formatCode}/g; s/\`\)/${formatCodeEnd}/g" |
+        if checkTruthy "$configValue_markdown"; then
+            escapeHtml | fold -w 80 -s
+        else
+            fold -w 80 -s | sed -E 's/^/  /'
+        fi
     echo ''
 }
 
@@ -346,7 +353,57 @@ printCodeBlock() {
     fi
 }
 
-# TODO escape html special characters
+printTableTitle() {
+    if checkTruthy "$configValue_markdown"; then
+        while [ "$#" -gt '1' ]; do
+            printf '| %s ' "$1" | escapeHtml
+            shift; shift
+        done
+        echo '|'
+    else
+        printf ' '
+        while [ "$#" -gt '1' ]; do
+            printf ' %s%-'"$2"'s%s' "$formatBold" "$1" "$formatBoldEnd"
+            shift; shift
+        done
+        echo ''
+    fi
+}
+
+printTableSeparator() {
+    if checkTruthy "$configValue_markdown"; then
+        while [ "$#" -gt '0' ]; do
+            printf '| --- '
+            shift
+        done
+        echo '|'
+    else
+        printf ' '
+        while [ "$#" -gt '0' ]; do
+            printf ' %s%s%s' "$formatBold" "$( repeatChar '=' "$1" )" "$formatBoldEnd"
+            shift
+        done
+        echo ''
+        echo ''
+    fi
+}
+
+printTableRow() {
+    if checkTruthy "$configValue_markdown"; then
+        while [ "$#" -gt '1' ]; do
+            printf '| %s ' "$1" | escapeHtml
+            shift; shift
+        done
+        echo '|'
+    else
+        printf ' '
+        while [ "$#" -gt '1' ]; do
+            printf ' %-'"$2"'s' "$1"
+            shift; shift
+        done
+        echo ''
+    fi
+}
 
 # TODO verbose/error messages?
 
@@ -449,12 +506,12 @@ case "$command" in
         commandComments="$( printf '%s\n'  "$COMMANDS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
         commandI=0
         printf '%s\n' "$commandNames" | while IFS= read -r commandName; do
+            # TODO: support markdown output
             commandI=$(( commandI + 1 ))
-            commandComment="$( getNthLine "$commandComments" "$commandI" | sed -E "s/\(\*/${formatBold}/" | sed -E "s/\*\)/${formatBoldEnd}/" )"
-            # TODO: use printing commands
+            commandComment="$( getNthLine "$commandComments" "$commandI" | sed -E "s/\(\*/${formatBold}/; s/\*\)/${formatBoldEnd}/" )"
             printf '  %s%s%s\n' "$formatBold" "$commandName" "$formatBoldEnd"
             printf '    %s\n' "$commandComment"
-            printNlIf "$configValue_verbose"
+            echo ''
         done
         printSubtitle 'Options:'
         configKeys="$( printf '%s\n'  "$defaults" | cut -d ' ' -f 1 )"
@@ -471,12 +528,12 @@ case "$command" in
                 configComment="$( printf '%s\n' "$configComment" | sed -E 's/ /\/disables /' )"
             fi
             optionName="${optionPrefix}$( printf '%s\n' "$configKey" | tr '.' '-' )"
-            # TODO: use printing commands
+            # TODO: support markdown output
             if checkTruthy "$configValue_verbose"; then
                 printf '  %s%-41s%s%sBuilt-in default: %s%s\n      %s\n\n' \
                     "$formatBold" "$optionName" "$formatBoldEnd" "$formatInfo" "$defaultValue" "$formatBoldEnd" "$configComment"
             else
-                printf '  %s%-41s%s\n      %s\n' \
+                printf '  %s%-41s%s\n      %s\n\n' \
                     "$formatBold" "$optionName" "$formatBoldEnd" "$configComment"
             fi
         done
@@ -500,22 +557,22 @@ case "$command" in
         exit 0
         ;;
     config)
-        # TODO use the printing commands
         if checkTruthy "$configValue_defaults"; then
             if [ -z "$subcommand" ] || [ "$subcommand" = 'list' ]; then
                 filteredDefaults="$defaults"
                 if ! checkTruthy "$configValue_all"; then
                     filteredDefaults="$( printf '%s\n' "$defaults" | grep -F '.' )"
                 fi
-                if checkTruthy "$configValue_verbose"; then
-                    printf '%s%-40s%s%s\n' "$formatBold" 'Key:' 'Default:' "$formatBoldEnd"
-                    printf '%s%s %s%s\n' "$formatBold" "$( repeatChar '=' 39 )" "$( repeatChar '=' 15 )" "$formatBoldEnd"
-                    echo ''
+                if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
+                    printTitle 'Default configuration'
+                    printTableTitle 'Key:' 40 'Default:' 15
+                    printTableSeparator 40 15
                     printf '%s\n' "$filteredDefaults" | while IFS= read -r line; do
                         configKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
                         configDefaultValue="$( printf '%s\n' "$line" | cut -d ' ' -f 2- )"
-                        printf '%-40s%s\n' "$configKey" "$configDefaultValue"
+                        printTableRow "$configKey" 40 "$configDefaultValue" 15
                     done
+                    echo ''
                 else
                     printf '%s\n' "$filteredDefaults"
                 fi
@@ -523,9 +580,12 @@ case "$command" in
             elif [ "$subcommand" = 'get' ]; then
                 configKey="$( getNthLine "$nonOptArgs" 2 )"
                 configDefaultValue="$( getConfigValue "$defaults" "$configKey" )"
-                if checkTruthy "$configValue_verbose"; then
-                    printf 'Key:     %s%s%s\n' "$formatBold" "$configKey" "$formatBoldEnd"
-                    printf 'Default: %s%s%s\n' "$formatBold" "$configDefaultValue" "$formatBoldEnd"
+                if checkTruthy "$configValue_markdown"; then
+                    printParagraph "Key: (\`${configKey}\`)"
+                    printParagraph "Default: (\`${configDefaultValue}\`)"
+                elif checkTruthy "$configValue_verbose"; then
+                    printf 'Key:     %s%s%s\n' "$formatCode" "$configKey" "$formatCodeEnd"
+                    printf 'Default: %s%s%s\n' "$formatCode" "$configDefaultValue" "$formatCodeEnd"
                 else
                     printf '%s\n' "$configDefaultValue"
                 fi
@@ -546,33 +606,36 @@ fi
 case "$command" in
     config)
         if [ -z "$subcommand" ] || [ "$subcommand" = 'list' ]; then
-            # TODO use the printing commands
             filteredConfig="$config"
             if ! checkTruthy "$configValue_all"; then
                 filteredConfig="$( printf '%s\n' "$config" | grep -F '.' )"
             fi
-            if checkTruthy "$configValue_verbose"; then
-                printf '%s%-40s%-15s%s%s\n' "$formatBold" 'Key:' 'Default:' 'Value:' "$formatBoldEnd"
-                printf '%s%s %s %s%s\n' "$formatBold" "$( repeatChar '=' 39 )" "$( repeatChar '=' 14 )" "$( repeatChar '=' 20 )" "$formatBoldEnd"
-                echo ''
+            if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
+                printTitle 'Current configuration'
+                printTableTitle 'Key:' 40 'Default:' 15 'Value:' 20
+                printTableSeparator 40 15 20
                 printf '%s\n' "$filteredConfig" | while IFS= read -r line; do
                     configKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
                     configValue="$( printf '%s\n' "$line" | cut -d ' ' -f 2- )"
                     configDefaultValue="$( getConfigValue "$defaults" "$configKey" )"
-                    printf '%-40s%-15s%s\n' "$configKey" "$configDefaultValue" "$configValue"
+                    printTableRow "$configKey" 40 "$configDefaultValue" 15 "$configValue" 20
                 done
+                echo ''
             else
                 printf '%s\n' "$filteredConfig"
             fi
         elif [ "$subcommand" = 'get' ]; then
-            # TODO use the printing commands
             configKey="$( getNthLine "$nonOptArgs" 2 )"
             configDefaultValue="$( getConfigValue "$defaults" "$configKey" )"
             configValue="$( getConfigValue "$config" "$configKey" )"
-            if checkTruthy "$configValue_verbose"; then
-                printf 'Key:     %s%s%s\n' "$formatBold" "$configKey" "$formatBoldEnd"
-                printf 'Default: %s%s%s\n' "$formatBold" "$configDefaultValue" "$formatBoldEnd"
-                printf 'Value:   %s%s%s\n' "$formatBold" "$configValue" "$formatBoldEnd"
+            if checkTruthy "$configValue_markdown"; then
+                printParagraph "Key: (\`${configKey}\`)"
+                printParagraph "Default: (\`${configDefaultValue}\`)"
+                printParagraph "Value: (\`${configValue}\`)"
+            elif checkTruthy "$configValue_verbose"; then
+                printf 'Key:     %s%s%s\n' "$formatCode" "$configKey" "$formatCodeEnd"
+                printf 'Default: %s%s%s\n' "$formatCode" "$configDefaultValue" "$formatCodeEnd"
+                printf 'Value:   %s%s%s\n' "$formatCode" "$configValue" "$formatCodeEnd"
             else
                 printf '%s\n' "$configValue"
             fi
