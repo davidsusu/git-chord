@@ -4,14 +4,14 @@ VERSION='0.1.0-SNAPSHOT'
 
 # TODO diff, state (etc.)
 COMMANDS="$( printf '%s' '
-help # Prints help (also works: (*-h*))
-version # Prints version of the chord extension (also works: (*-v*))
-config # Prints the current chord configuration (use (*--defaults*) to see the defaults)
+help # Prints help (also works: (`-h`))
+version # Prints version of the chord extension (also works: (`-v`))
+config # Prints the current chord configuration (use (`--defaults`) to see the defaults)
 snapshot # Creates a snapshot of the repository state
 apply # Applies a previously saved snapshot to the repository
-show # Shows full data of a previously saved snapshot (or using (*--all*): all chord branches)
-push # Pushes the default chord branch (or using (*--all*): all chord branches)
-pull # Pulls the default chord branch (or using (*--all*): all chord branches)
+show # Shows full data of a previously saved snapshot (or using (`--all`): all chord branches)
+push # Pushes the default chord branch (or using (`--all`): all chord branches)
+pull # Pulls the default chord branch (or using (`--all`): all chord branches)
 ' | tail -n +2 )"
 
 DEFAULT_COMMAND='snapshot'
@@ -296,12 +296,16 @@ if checkTruthy "$configValue_color"; then
     fi
 fi
 
-escapeHtml() {
+applyInlineFormatting() { # stdin
+    sed -E "s/\(\*/${formatBold}/g; s/\*\)/${formatBoldEnd}/g; s/\(\`/${formatCode}/g; s/\`\)/${formatCodeEnd}/g"
+}
+
+escapeHtml() { # stdin
     # TODO? keep between inline code block...
     sed -E 's/&/\&amp;/g; s/"/\&quot;/g; s/</\&lt;/g; s/>/\&gt;/g'
 }
 
-printGrandTitle() {
+printGrandTitle() { # $1: title
     if checkTruthy "$configValue_markdown"; then
         printf '# %s\n\n' "$1" | escapeHtml
     else
@@ -312,7 +316,7 @@ printGrandTitle() {
     fi
 }
 
-printTitle() {
+printTitle() { # $1: title
     if checkTruthy "$configValue_markdown"; then
         printf '# %s\n\n' "$1" | escapeHtml
     else
@@ -321,7 +325,7 @@ printTitle() {
     fi
 }
 
-printSubtitle() {
+printSubtitle() { # $1: subtitle
     if checkTruthy "$configValue_markdown"; then
         printf '## %s\n\n' "$1" | escapeHtml
     else
@@ -331,9 +335,9 @@ printSubtitle() {
     fi
 }
 
-printParagraph() {
+printParagraph() { # $@: content
     ( printf '%s ' "$@" ; echo '' ) | sed -E 's/ $//' |
-        sed -E "s/\(\*/${formatBold}/g; s/\*\)/${formatBoldEnd}/g; s/\(\`/${formatCode}/g; s/\`\)/${formatCodeEnd}/g" |
+        applyInlineFormatting |
         if checkTruthy "$configValue_markdown"; then
             escapeHtml | fold -w 80 -s
         else
@@ -342,7 +346,7 @@ printParagraph() {
     echo ''
 }
 
-printCodeBlock() {
+printCodeBlock() { # $@: lines
     if checkTruthy "$configValue_markdown"; then
         printf '```\n'
         printf '%s\n' "$@"
@@ -353,7 +357,7 @@ printCodeBlock() {
     fi
 }
 
-printTableTitle() {
+printTableTitle() { # $@: title-width pairs
     if checkTruthy "$configValue_markdown"; then
         while [ "$#" -gt '1' ]; do
             printf '| %s ' "$1" | escapeHtml
@@ -370,7 +374,7 @@ printTableTitle() {
     fi
 }
 
-printTableSeparator() {
+printTableSeparator() { # $@: widths
     if checkTruthy "$configValue_markdown"; then
         while [ "$#" -gt '0' ]; do
             printf '| --- '
@@ -384,11 +388,10 @@ printTableSeparator() {
             shift
         done
         echo ''
-        echo ''
     fi
 }
 
-printTableRow() {
+printTableRow() { # $@: value-width pairs
     if checkTruthy "$configValue_markdown"; then
         while [ "$#" -gt '1' ]; do
             printf '| %s ' "$1" | escapeHtml
@@ -402,6 +405,33 @@ printTableRow() {
             shift; shift
         done
         echo ''
+    fi
+}
+
+printCommandShortDescription() { # $1: commandName, $2: commandDescription
+    if checkTruthy "$configValue_markdown"; then
+        printf '`%s`: %s.\n\n' "$1" "$( printf '%s\n' "$2" | applyInlineFormatting )"
+    else
+        printf '  %s%s%s\n' "$formatBold" "$1" "$formatBoldEnd"
+        printf '    %s\n' "$2" | applyInlineFormatting
+        echo ''
+    fi
+}
+
+printOptionShortDescription() { # $1: optionName, $2: defaultValue, $3: optionDescription
+    if checkTruthy "$configValue_markdown"; then
+        printf '`%s`: %s. Default: `%s`\n\n' \
+            "$1" "$( printf '%s\n' "$3" | applyInlineFormatting )" "$2"
+    else
+        if checkTruthy "$configValue_verbose"; then
+            printf '  %s%-41s%s%sBuilt-in default: %s%s\n      %s\n\n' \
+                "$formatBold" "$1" "$formatBoldEnd" "$formatInfo" "$2" "$formatBoldEnd" \
+                "$( printf '%s\n' "$3" | applyInlineFormatting )"
+        else
+            printf '  %s%-41s%s\n      %s\n\n' \
+                "$formatBold" "$1" "$formatBoldEnd" \
+                "$( printf '%s\n' "$3" | applyInlineFormatting )"
+        fi
     fi
 }
 
@@ -506,12 +536,9 @@ case "$command" in
         commandComments="$( printf '%s\n'  "$COMMANDS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
         commandI=0
         printf '%s\n' "$commandNames" | while IFS= read -r commandName; do
-            # TODO: support markdown output
             commandI=$(( commandI + 1 ))
-            commandComment="$( getNthLine "$commandComments" "$commandI" | sed -E "s/\(\*/${formatBold}/; s/\*\)/${formatBoldEnd}/" )"
-            printf '  %s%s%s\n' "$formatBold" "$commandName" "$formatBoldEnd"
-            printf '    %s\n' "$commandComment"
-            echo ''
+            commandComment="$( getNthLine "$commandComments" "$commandI" )"
+            printCommandShortDescription "$commandName" "$commandComment"
         done
         printSubtitle 'Options:'
         configKeys="$( printf '%s\n'  "$defaults" | cut -d ' ' -f 1 )"
@@ -528,14 +555,7 @@ case "$command" in
                 configComment="$( printf '%s\n' "$configComment" | sed -E 's/ /\/disables /' )"
             fi
             optionName="${optionPrefix}$( printf '%s\n' "$configKey" | tr '.' '-' )"
-            # TODO: support markdown output
-            if checkTruthy "$configValue_verbose"; then
-                printf '  %s%-41s%s%sBuilt-in default: %s%s\n      %s\n\n' \
-                    "$formatBold" "$optionName" "$formatBoldEnd" "$formatInfo" "$defaultValue" "$formatBoldEnd" "$configComment"
-            else
-                printf '  %s%-41s%s\n      %s\n\n' \
-                    "$formatBold" "$optionName" "$formatBoldEnd" "$configComment"
-            fi
+            printOptionShortDescription "$optionName" "$defaultValue" "$configComment"
         done
         printSubtitle 'Exit statuses:'
         printParagraph '(*0*) - in case of success'
