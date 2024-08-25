@@ -74,12 +74,8 @@ getNthLine() { # $1: lines, $2 lineNo
     printf '%s\n' "$1" | sed "${2}q;d"
 }
 
-getLength() { # $1: string
-    printf '%s' "$1" | wc -c
-}
-
 repeatChar() { # $1: char, $2: length
-    printf "%s%${2}s%s\n" | tr ' ' "$1"
+    printf "%${2}s" | tr ' ' "$1"
 }
 
 normalizeKey() { # $1: rawKey
@@ -296,21 +292,58 @@ if checkTruthy "$configValue_color"; then
     fi
 fi
 
+getLength() { # $1: string
+    if checkTruthy "$configValue_color"; then
+        printf '%s' "$1" | sed -E 's/\x1b\[[0-9;]*m//g' | wc -m
+    else
+        printf '%s' "$1" | wc -m
+    fi
+}
+
+padLeft() { # $1: string, $2: length, subshell local: $fieldLength, $stringLength, $padLength
+    if checkTruthy "$configValue_color"; then
+        (
+            printf '%s' "$1"
+            fieldLength="$2"
+            stringLength="$( getLength "$1" )"
+            padLength=$(( fieldLength - stringLength ))
+            if [ "$padLength" -gt 0 ]; then
+                repeatChar ' ' "$padLength"
+            fi
+        )
+    else
+        printf "%-${2}s" "$1"
+    fi
+}
+
 applyInlineFormatting() { # stdin
     sed -E "s/\(\*/${formatBold}/g; s/\*\)/${formatBoldEnd}/g; s/\(\`/${formatCode}/g; s/\`\)/${formatCodeEnd}/g"
 }
 
 escapeHtml() { # stdin
-    # TODO? keep between inline code block...
     sed -E 's/&/\&amp;/g; s/"/\&quot;/g; s/</\&lt;/g; s/>/\&gt;/g'
 }
 
+escapeMarkdown() ( # stdin, subshell local: $inCodeBlock
+    inCodeBlock=0
+    sed -E 's/$/\n/; s/`/\n/g' | while IFS= read -r token; do
+        inCodeBlock=$(( 1 - inCodeBlock ))
+        if [ "$inCodeBlock" -eq 1 ]; then
+            printf '%s' "$token" | escapeHtml
+        elif [ -n "$token" ]; then
+            printf '`%s`' "$token"
+        else
+            echo ''
+        fi
+    done
+)
+
 printGrandTitle() { # $1: title
     if checkTruthy "$configValue_markdown"; then
-        printf '# %s\n\n' "$1" | escapeHtml
+        printf '# %s\n\n' "$1" | escapeMarkdown
     else
         echo ''
-        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd" | escapeHtml
+        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd"
         printf '%s\n\n' "$( repeatChar '=' "$( getLength "$1" )" )"
         printNlIf "$configValue_verbose"
     fi
@@ -318,19 +351,19 @@ printGrandTitle() { # $1: title
 
 printTitle() { # $1: title
     if checkTruthy "$configValue_markdown"; then
-        printf '# %s\n\n' "$1" | escapeHtml
+        printf '# %s\n\n' "$1" | escapeMarkdown
     else
         printNlIf "$configValue_verbose"
-        printf '%s%s%s\n\n' "$formatBold" "$1" "$formatBoldEnd" | escapeHtml
+        printf '%s%s%s\n\n' "$formatBold" "$1" "$formatBoldEnd"s
     fi
 }
 
 printSubtitle() { # $1: subtitle
     if checkTruthy "$configValue_markdown"; then
-        printf '## %s\n\n' "$1" | escapeHtml
+        printf '## %s\n\n' "$1" | escapeMarkdown
     else
         printNlIf "$configValue_verbose"
-        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd" | escapeHtml
+        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd"
         printNlIf "$configValue_verbose"
     fi
 }
@@ -339,7 +372,7 @@ printParagraph() { # $@: content
     ( printf '%s ' "$@" ; echo '' ) | sed -E 's/ $//' |
         applyInlineFormatting |
         if checkTruthy "$configValue_markdown"; then
-            escapeHtml | fold -w 80 -s
+            escapeMarkdown | fold -w 80 -s
         else
             fold -w 80 -s | sed -E 's/^/  /'
         fi
@@ -360,14 +393,14 @@ printCodeBlock() { # $@: lines
 printTableTitle() { # $@: title-width pairs
     if checkTruthy "$configValue_markdown"; then
         while [ "$#" -gt '1' ]; do
-            printf '| %s ' "$1" | escapeHtml
+            printf '| %s ' "$1" | escapeMarkdown
             shift; shift
         done
         echo '|'
     else
         printf ' '
         while [ "$#" -gt '1' ]; do
-            printf ' %s%-'"$2"'s%s' "$formatBold" "$1" "$formatBoldEnd"
+            printf ' %s%s%s' "$formatBold" "$( padLeft "$1" "$2" )" "$formatBoldEnd"
             shift; shift
         done
         echo ''
@@ -394,14 +427,14 @@ printTableSeparator() { # $@: widths
 printTableRow() { # $@: value-width pairs
     if checkTruthy "$configValue_markdown"; then
         while [ "$#" -gt '1' ]; do
-            printf '| %s ' "$1" | escapeHtml
+            printf '| %s ' "$1" | escapeMarkdown
             shift; shift
         done
         echo '|'
     else
         printf ' '
         while [ "$#" -gt '1' ]; do
-            printf ' %-'"$2"'s' "$1"
+            printf ' %s' "$( padLeft "$1" "$2" )"
             shift; shift
         done
         echo ''
@@ -424,12 +457,13 @@ printOptionShortDescription() { # $1: optionName, $2: defaultValue, $3: optionDe
             "$1" "$( printf '%s\n' "$3" | applyInlineFormatting )" "$2"
     else
         if checkTruthy "$configValue_verbose"; then
-            printf '  %s%-41s%s%sBuilt-in default: %s%s\n      %s\n\n' \
-                "$formatBold" "$1" "$formatBoldEnd" "$formatInfo" "$2" "$formatBoldEnd" \
+            printf '  %s%s%s%sBuilt-in default: %s%s\n      %s\n\n' \
+                "$formatBold" "$( padLeft "$1" 41 )" "$formatBoldEnd" \
+                "$formatInfo" "$2" "$formatBoldEnd" \
                 "$( printf '%s\n' "$3" | applyInlineFormatting )"
         else
-            printf '  %s%-41s%s\n      %s\n\n' \
-                "$formatBold" "$1" "$formatBoldEnd" \
+            printf '  %s%s%s\n      %s\n\n' \
+                "$formatBold" "$( padLeft "$1" 41 )" "$formatBoldEnd" \
                 "$( printf '%s\n' "$3" | applyInlineFormatting )"
         fi
     fi
@@ -546,7 +580,7 @@ case "$command" in
         configComments="$( printf '%s\n'  "$OPTIONS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
         configI=0
         printf '%s\n' "$configKeys" | while IFS= read -r configKey; do
-            configI="$(( configI + 1 ))"
+            configI=$(( configI + 1 ))
             defaultValue="$( printf '%s\n'  "$defaultValues" | sed "${configI}q;d" )"
             configComment="$( printf '%s\n'  "$configComments" | sed "${configI}q;d" )"
             optionPrefix='--'
@@ -590,7 +624,9 @@ case "$command" in
                     printf '%s\n' "$filteredDefaults" | while IFS= read -r line; do
                         configKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
                         configDefaultValue="$( printf '%s\n' "$line" | cut -d ' ' -f 2- )"
-                        printTableRow "$configKey" 40 "$configDefaultValue" 15
+                        printTableRow \
+                            "${formatCode}${configKey}${formatCodeEnd}" 40 \
+                            "${formatCode}${configDefaultValue}${formatCodeEnd}" 15
                     done
                     echo ''
                 else
@@ -638,7 +674,10 @@ case "$command" in
                     configKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
                     configValue="$( printf '%s\n' "$line" | cut -d ' ' -f 2- )"
                     configDefaultValue="$( getConfigValue "$defaults" "$configKey" )"
-                    printTableRow "$configKey" 40 "$configDefaultValue" 15 "$configValue" 20
+                    printTableRow \
+                        "${formatCode}${configKey}${formatCodeEnd}" 40 \
+                        "${formatCode}${configDefaultValue}${formatCodeEnd}" 15 \
+                        "${formatCode}${configValue}${formatCodeEnd}" 20
                 done
                 echo ''
             else
@@ -685,6 +724,8 @@ case "$command" in
     snapshot)
         
         # TODO
+        printf '%sERROR: The comand snapshot is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        exit 1
         #trackers.prefix chord/ # Sets the tracker branch prefix
         #trackers.default main # Sets the tracker branch name
         #branches.store.enabled true # Enables saving state of tracked branches
@@ -699,17 +740,7 @@ case "$command" in
 
         exit 0
         ;;
+    *)
+        printf '%sERROR: Unknown command: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        exit 1
 esac
-
-# TODO
-echo "COMMAND: $command"
-echo ""
-echo "Non-opt args:"
-echo "============="
-echo "$nonOptArgs"
-echo ""
-echo "Effective config:"
-echo "================="
-echo "$config"
-
-
