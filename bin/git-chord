@@ -2,14 +2,15 @@
 
 VERSION='0.1.0-SNAPSHOT'
 
-# TODO diff, state (etc.)
 COMMANDS="$( printf '%s' '
 help # Prints help (also works: (`-h`))
 version # Prints version of the chord extension (also works: (`-v`))
 config # Prints the current chord configuration (use (`--defaults`) to see the defaults)
 snapshot # Creates a snapshot of the repository state
 apply # Applies a previously saved snapshot to the repository
-show # Shows full data of a previously saved snapshot (or using (`--all`): all chord branches)
+state # Shows the current state based on the configuration
+show # Shows full data of a previously saved snapshot
+diff # Shows diff between a previously saved snapshot and the current state
 push # Pushes the default chord branch (or using (`--all`): all chord branches)
 pull # Pulls the default chord branch (or using (`--all`): all chord branches)
 ' | tail -n +2 )"
@@ -469,6 +470,88 @@ printOptionShortDescription() { # $1: optionName, $2: defaultValue, $3: optionDe
     fi
 }
 
+escapeYamlValue() { # stdin
+    printf "'%s'\n" "$( sed -E "s/'/''/" )"
+}
+
+catYamlLinesOrElse() { # stdin, $1: fallbackString
+    awk --assign fallback="$1" '{ printf "\n%s",$0 } END { if (NR == 0) { print fallback } else { print "" } }'
+}
+
+catYamlMultiline() { # $1: value, $2: indentLength
+    if [ "$( printf '%s' "$1" | wc -l )" -eq 0 ]; then
+        printf '%s\n' "$( printf '%s\n' "$1" | escapeYamlValue )"
+    else
+        printf '|+\n'
+        printf '%s\n' "$1" | while IFS= read -r line; do
+            printf "%-${2}s%s\\n" '' "$line"
+        done
+    fi
+}
+
+getHeadReference() {
+    git symbolic-ref --short HEAD 2>/dev/null
+}
+
+getHeadCommitId() {
+    git rev-parse --revs-only HEAD 2>/dev/null
+}
+
+printState() ( # subshell local: $branchName, $tagId, $annotatedTagName, $commitId, $lightweightTagName, $tmpDir
+    printf 'timestamp: %s\n' "$( date --utc +'%Y-%m-%dT%H:%M:%SZ' | escapeYamlValue )"
+    if checkTruthy "$configValue_branches_store_enabled"; then
+        printf 'branches: '
+        git for-each-ref --format='%(refname:short)' refs/heads |
+            awk --assign search="$configValue_trackers_prefix" 'substr($0, 1, length(search)) != search { print }' |
+            grep -E "^${configValue_branches_store_regex}$" |
+            while IFS= read -r branchName; do
+                printf '    %s: %s\n' "$( printf '%s\n' "$branchName" | escapeYamlValue )" "$( git rev-parse "$branchName" | escapeYamlValue )"
+            done |
+            catYamlLinesOrElse '{}'
+    fi
+    if checkTruthy "$configValue_annotatedtags_store_enabled"; then
+        printf 'annotatedTags: '
+        git for-each-ref refs/tags |
+            grep -E '\w+ tag\s+refs/tags/'"$configValue_annotatedtags_store_regex"'$' |
+            sed -E 's/ .*\// /' |
+            while IFS=' ' read -r tagId annotatedTagName; do
+                printf '    %s:\n' "$( printf '%s\n' "$annotatedTagName" | escapeYamlValue )"
+                printf '        tagId: %s\n' "$( printf '%s\n' "$tagId" | escapeYamlValue )"
+                printf '        commitId: %s\n' "$( echo '???' | escapeYamlValue )"
+                printf '        message: %s\n' "$( catYamlMultiline "$( git tag --list "$annotatedTagName" -n99 --format='%(contents)' | head -n -1 )" 12 )"
+            done |
+            catYamlLinesOrElse '{}'
+    fi
+    if checkTruthy "$configValue_lightweighttags_store_enabled"; then
+        printf 'lightweightTags: '
+        git for-each-ref refs/tags |
+            grep -E '\w+ commit\s+refs/tags/'"$configValue_lightweighttags_store_regex"'$' |
+            sed -E 's/ .*\// /' |
+            while IFS=' ' read -r commitId lightweightTagName; do
+                printf '    %s: %s\n' "$lightweightTagName" "$commitId"
+            done |
+            catYamlLinesOrElse '{}'
+    fi
+    if checkTruthy "$configValue_head_store_enabled"; then
+        printf 'head:\n'
+        printf '    ref: %s\n' "$( getHeadReference | escapeYamlValue )"
+        printf '    commitId: %s\n' "$( getHeadCommitId | escapeYamlValue )"
+    fi
+    if checkTruthy "$configValue_stagingarea_store_enabled"; then
+        printf 'stagingArea:\n'
+        printf '    treeId: %s\n' "$( git write-tree | escapeYamlValue )"
+    fi
+    if checkTruthy "$configValue_workingtree_store_enabled"; then (
+        # FIXME: not too efficient, but maybe the only option that is both safe and portable
+        tmpDir='./.git/git-chord-tmp'
+        printf 'workingTree:\n'
+        GIT_DIR="$tmpDir" git init 2>/dev/null >/dev/null
+        GIT_DIR="$tmpDir" GIT_WORK_TREE='.' git add --all .
+        printf '    treeId: %s\n' "$( GIT_DIR="$tmpDir" git write-tree | escapeYamlValue )"
+        rm -rf "$tmpDir"
+    ) fi
+)
+
 # TODO verbose/error messages?
 
 if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
@@ -550,7 +633,23 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             ;
             exit 0
             ;;
-        # TODO
+        # TODO: apply
+        state)
+            printTitle 'git chord state'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord state'
+            printSubtitle 'Description:'
+            printParagraph \
+                'Prints the current state in YAML format,' \
+                'based on the current configuration.' \
+                'This is the same content that will be saved using the (`snapshot`) command.' \
+            ;
+            exit 0
+            ;;
+        # TODO: show
+        # TODO: diff
+        # TODO: push
+        # TODO: pull
         *)
             printf '%s%s: %s%s\n' "$formatError" "ERROR: No help for subcommand" "$subcommand" "$formatBoldEnd" >&2
             exit 1
@@ -722,25 +821,35 @@ case "$command" in
         exit 0
         ;;
     snapshot)
-        
-        # TODO
-        printf '%sERROR: The comand snapshot is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        printf '%sERROR: The snapshot command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
         exit 1
-        #trackers.prefix chord/ # Sets the tracker branch prefix
-        #trackers.default main # Sets the tracker branch name
-        #branches.store.enabled true # Enables saving state of tracked branches
-        #branches.store.regex .* # Sets the regex pattern for saving tracked branches
-        #annotatedtags.store.enabled true # Enables saving state of tracked annotated tags
-        #annotatedtags.store.regex .* # Sets the regex pattern for saving tracked annotated tags
-        #lightweighttags.store.enabled false # Enables saving state of tracked lightweight tags
-        #lightweighttags.store.regex .* # Sets the regex pattern for saving tracked lightweight tags
-        #head.store.enabled true # Enables saving state of the HEAD
-        #stagingarea.store.enabled false # Enables saving state of the staging area
-        #workingtree.store.enabled false # Enables saving the state of the working tree
-
+        ;;
+    apply)
+        printf '%sERROR: The apply command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        exit 1
+        ;;
+    state)
+        printState
         exit 0
+        ;;
+    show)
+        printf '%sERROR: The show command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        exit 1
+        ;;
+    diff)
+        printf '%sERROR: The diff command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        exit 1
+        ;;
+    push)
+        printf '%sERROR: The push command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        exit 1
+        ;;
+    pull)
+        printf '%sERROR: The pull command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        exit 1
         ;;
     *)
         printf '%sERROR: Unknown command: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
         exit 1
+        ;;
 esac
