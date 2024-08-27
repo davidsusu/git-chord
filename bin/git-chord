@@ -152,7 +152,7 @@ checkConfigKey() ( # $1: config, $2: key, $3: messagePrefix, subshell local: $li
     done <<EOF
 $( printf '%s\n' "$1" )
 EOF
-    printf '%sUnrecognized configuration key: %s\n' "$3" "$2" >&2
+    printf '%s%s: %s\n' "$3" 'Unrecognized configuration key' "$2" >&2
     return 1
 )
 
@@ -497,6 +497,56 @@ getHeadCommitId() {
     git rev-parse --revs-only HEAD 2>/dev/null
 }
 
+getWorkingtreeTreeId() ( # subshell local: $gitDir, $tmpGitDir, $$treeId, $linkingSupported
+    gitDir='.git'
+    tmpGitDir="${gitDir}/git-chord-tmp"
+    testFileName="git-chord-link-test"
+    treeId=''
+    linkingSupported=''
+    
+    if [ -e "${tmpGitDir}" ] || [ -e "${gitDir}/objects/${testFileName}" ]; then
+        printf '%sERROR: %s%s\n' "$formatError" 'Temporary git chord entries detected on the file system. Abort.' "$formatBoldEnd" >&2
+        exit 1
+    fi
+
+    GIT_DIR="$tmpGitDir" git init -q && rm -rf "${tmpGitDir}/objects" || {
+        printf '%sERROR: %s%s\n' "$formatError" 'Failed to prepare the temporary git directory. Abort.' "$formatBoldEnd" >&2
+        exit 1
+    }
+    
+    touch "${gitDir}/objects/${testFileName}"
+    ln -s "$( realpath "${gitDir}/objects" )" "${tmpGitDir}/objects"
+    if [ -f "${tmpGitDir}/objects/${testFileName}" ]; then
+        linkingSupported='1'
+    else
+        mv "${gitDir}/objects" "${tmpGitDir}/objects"
+        if ! [ -f "${tmpGitDir}/objects/${testFileName}" ]; then
+            printf '%sERROR: %s%s\n' "$formatError" 'Failed to link or move the git objects directory. Abort.' "$formatBoldEnd" >&2
+            exit 1
+        fi
+    fi
+    
+    GIT_DIR="$tmpGitDir" GIT_WORK_TREE=. git add --all
+    treeId="$( GIT_DIR="$tmpGitDir" git write-tree )"
+
+    if [ -z "$treeId" ]; then
+        printf '%sERROR: %s%s\n' "$formatError" 'Failed to calculate the tree id of the working tree. Abort.' "$formatBoldEnd" >&2
+        exit 1
+    fi
+    
+    if [ -z "$linkingSupported" ]; then
+        mv "${tmpGitDir}/objects" "${gitDir}/objects"
+        if ! [ -f "${gitDir}/objects/${testFileName}" ]; then
+            printf '%sERROR: %s%s\n' "$formatError" 'Failed to move the git objects directory back to the original location. Abort.' "$formatBoldEnd" >&2
+            exit 1
+        fi
+    fi
+    
+    rm "${gitDir}/objects/${testFileName}"
+    rm -rf "$tmpGitDir"
+    printf '%s\n' "$treeId"
+)
+
 printState() ( # subshell local: $branchName, $tagId, $annotatedTagName, $commitId, $lightweightTagName, $tmpDir
     printf 'timestamp: %s\n' "$( date --utc +'%Y-%m-%dT%H:%M:%SZ' | escapeYamlValue )"
     if checkTruthy "$configValue_branches_store_enabled"; then
@@ -542,13 +592,8 @@ printState() ( # subshell local: $branchName, $tagId, $annotatedTagName, $commit
         printf '    treeId: %s\n' "$( git write-tree | escapeYamlValue )"
     fi
     if checkTruthy "$configValue_workingtree_store_enabled"; then (
-        # FIXME: not too efficient, but maybe the only option that is both safe and portable
-        tmpDir='./.git/git-chord-tmp'
         printf 'workingTree:\n'
-        GIT_DIR="$tmpDir" git init 2>/dev/null >/dev/null
-        GIT_DIR="$tmpDir" GIT_WORK_TREE='.' git add --all .
-        printf '    treeId: %s\n' "$( GIT_DIR="$tmpDir" git write-tree | escapeYamlValue )"
-        rm -rf "$tmpDir"
+        printf '    treeId: %s\n' "$( getWorkingtreeTreeId | escapeYamlValue )"
     ) fi
 )
 
@@ -651,7 +696,7 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
         # TODO: push
         # TODO: pull
         *)
-            printf '%s%s: %s%s\n' "$formatError" "ERROR: No help for subcommand" "$subcommand" "$formatBoldEnd" >&2
+            printf '%sERROR: %s: %s%s\n' "$formatError" 'No help for subcommand' "$subcommand" "$formatBoldEnd" >&2
             exit 1
             ;;
     esac
@@ -746,7 +791,7 @@ case "$command" in
                 fi
                 exit 0
             elif [ "$subcommand" = 'set' ]; then
-                printf '%sERROR: Default value can not be changed%s\n' "$formatError" "$formatBoldEnd" >&2
+                printf '%sERROR: %s%s\n' "$formatError" 'Default value can not be changed' "$formatBoldEnd" >&2
                 exit 1
             fi
         fi
@@ -754,7 +799,7 @@ case "$command" in
 esac
 
 if ! git rev-parse --git-dir > /dev/null 2>&1; then
-    printf '%sERROR: Not a git repository%s\n' "$formatError" "$formatBoldEnd" >&2
+    printf '%sERROR: %s%s\n' "$formatError" 'Not a git repository' "$formatBoldEnd" >&2
     exit 1
 fi
 
@@ -811,21 +856,21 @@ case "$command" in
                 exit 2
             fi
             if ! git config "chord.${configKey}" "$configNewValue"; then
-                printf '%sERROR: Failed to set value%s\n' "$formatError" "$formatBoldEnd" >&2
+                printf '%sERROR: %s%s\n' "$formatError" 'Failed to set value' "$formatBoldEnd" >&2
                 exit 1
             fi
         else
-            printf '%sERROR: Unknown subcommand of config: %s%s\n' "$formatError" "$subcommand" "$formatBoldEnd" >&2
+            printf '%sERROR: %s: %s%s\n' "$formatError" 'Unknown subcommand of config' "$subcommand" "$formatBoldEnd" >&2
             exit 1
         fi
         exit 0
         ;;
     snapshot)
-        printf '%sERROR: The snapshot command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        printf '%sERROR: %s%s\n' "$formatError" 'The snapshot command is not implemented yet' "$formatBoldEnd" >&2
         exit 1
         ;;
     apply)
-        printf '%sERROR: The apply command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        printf '%sERROR: %s%s\n' "$formatError" 'The apply command is not implemented yet' "$formatBoldEnd" >&2
         exit 1
         ;;
     state)
@@ -833,23 +878,23 @@ case "$command" in
         exit 0
         ;;
     show)
-        printf '%sERROR: The show command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        printf '%sERROR: %s%s\n' "$formatError" 'The show command is not implemented yet' "$formatBoldEnd" >&2
         exit 1
         ;;
     diff)
-        printf '%sERROR: The diff command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        printf '%sERROR: %s%s\n' "$formatError" 'The diff command is not implemented yet' "$formatBoldEnd" >&2
         exit 1
         ;;
     push)
-        printf '%sERROR: The push command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        printf '%sERROR: %s%s\n' "$formatError" 'The push command is not implemented yet' "$formatBoldEnd" >&2
         exit 1
         ;;
     pull)
-        printf '%sERROR: The pull command is not implemented yet: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        printf '%sERROR: %s%s\n' "$formatError" 'The pull command is not implemented yet' "$formatBoldEnd" >&2
         exit 1
         ;;
     *)
-        printf '%sERROR: Unknown command: %s%s\n' "$formatError" "$command" "$formatBoldEnd" >&2
+        printf '%sERROR: %s%s\n' "$formatError" 'Unknown command' "$formatBoldEnd" >&2
         exit 1
         ;;
 esac
