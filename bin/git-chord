@@ -550,55 +550,58 @@ getWorkingtreeTreeId() ( # subshell local: $gitDir, $tmpGitDir, $$treeId, $linki
     printf '%s\n' "$treeId"
 )
 
-printState() ( # subshell local: $branchName, $tagId, $annotatedTagName, $commitId, $lightweightTagName, $tmpDir
-    printf 'timestamp: %s\n' "$( date --utc +'%Y-%m-%dT%H:%M:%SZ' | escapeYamlValue )"
-    if checkTruthy "$configValue_branches_store_enabled"; then
-        printf 'branches: '
-        git for-each-ref --format='%(refname:short)' refs/heads |
-            awk --assign search="$configValue_trackers_prefix" 'substr($0, 1, length(search)) != search { print }' |
-            grep -E "^${configValue_branches_store_regex}$" |
-            while IFS= read -r branchName; do
-                printf '    %s: %s\n' "$( printf '%s\n' "$branchName" | escapeYamlValue )" "$( git rev-parse "$branchName" | escapeYamlValue )"
-            done |
-            catYamlLinesOrElse '{}'
-    fi
-    if checkTruthy "$configValue_annotatedtags_store_enabled"; then
-        printf 'annotatedTags: '
-        git for-each-ref refs/tags |
-            grep -E '\w+ tag\s+refs/tags/'"$configValue_annotatedtags_store_regex"'$' |
-            sed -E 's/ .*\// /' |
-            while IFS=' ' read -r tagId annotatedTagName; do
-                printf '    %s:\n' "$( printf '%s\n' "$annotatedTagName" | escapeYamlValue )"
-                printf '        tagId: %s\n' "$( printf '%s\n' "$tagId" | escapeYamlValue )"
-                printf '        commitId: %s\n' "$( echo '???' | escapeYamlValue )"
-                printf '        message: %s\n' "$( catYamlMultiline "$( git tag --list "$annotatedTagName" -n99 --format='%(contents)' | head -n -1 )" 12 )"
-            done |
-            catYamlLinesOrElse '{}'
-    fi
-    if checkTruthy "$configValue_lightweighttags_store_enabled"; then
-        printf 'lightweightTags: '
-        git for-each-ref refs/tags |
-            grep -E '\w+ commit\s+refs/tags/'"$configValue_lightweighttags_store_regex"'$' |
-            sed -E 's/ .*\// /' |
-            while IFS=' ' read -r commitId lightweightTagName; do
-                printf '    %s: %s\n' "$lightweightTagName" "$commitId"
-            done |
-            catYamlLinesOrElse '{}'
-    fi
-    if checkTruthy "$configValue_head_store_enabled"; then
-        printf 'head:\n'
-        printf '    ref: %s\n' "$( getHeadReference | escapeYamlValue )"
-        printf '    commitId: %s\n' "$( getHeadCommitId | escapeYamlValue )"
-    fi
-    if checkTruthy "$configValue_stagingarea_store_enabled"; then
-        printf 'stagingArea:\n'
-        printf '    treeId: %s\n' "$( git write-tree | escapeYamlValue )"
-    fi
-    if checkTruthy "$configValue_workingtree_store_enabled"; then (
-        printf 'workingTree:\n'
-        printf '    treeId: %s\n' "$( getWorkingtreeTreeId | escapeYamlValue )"
-    ) fi
-)
+printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commitId, $lightweightTagName, $tmpDir
+    # stdin is holded back until all possible stderr was printed
+    printf '%s\n' "$(
+        printf 'timestamp: %s\n' "$( date --utc +'%Y-%m-%dT%H:%M:%SZ' | escapeYamlValue )"
+        if checkTruthy "$configValue_branches_store_enabled"; then
+            printf 'branches: '
+            git for-each-ref --format='%(refname:short)' refs/heads |
+                awk --assign search="$configValue_trackers_prefix" 'substr($0, 1, length(search)) != search { print }' |
+                grep -E "^${configValue_branches_store_regex}$" |
+                while IFS= read -r branchName; do
+                    printf '    %s: %s\n' "$( printf '%s\n' "$branchName" | escapeYamlValue )" "$( git rev-parse "$branchName" | escapeYamlValue )"
+                done |
+                catYamlLinesOrElse '{}'
+        fi
+        if checkTruthy "$configValue_annotatedtags_store_enabled"; then
+            printf 'annotatedTags: '
+            git for-each-ref refs/tags |
+                grep -E '\w+ tag\s+refs/tags/'"$configValue_annotatedtags_store_regex"'$' |
+                sed -E 's/ .*\// /' |
+                while IFS=' ' read -r tagId annotatedTagName; do
+                    printf '    %s:\n' "$( printf '%s\n' "$annotatedTagName" | escapeYamlValue )"
+                    printf '        tagId: %s\n' "$( printf '%s\n' "$tagId" | escapeYamlValue )"
+                    printf '        commitId: %s\n' "$( echo '???' | escapeYamlValue )"
+                    printf '        message: %s\n' "$( catYamlMultiline "$( git tag --list "$annotatedTagName" -n99 --format='%(contents)' | head -n -1 )" 12 )"
+                done |
+                catYamlLinesOrElse '{}'
+        fi
+        if checkTruthy "$configValue_lightweighttags_store_enabled"; then
+            printf 'lightweightTags: '
+            git for-each-ref refs/tags |
+                grep -E '\w+ commit\s+refs/tags/'"$configValue_lightweighttags_store_regex"'$' |
+                sed -E 's/ .*\// /' |
+                while IFS=' ' read -r commitId lightweightTagName; do
+                    printf '    %s: %s\n' "$lightweightTagName" "$commitId"
+                done |
+                catYamlLinesOrElse '{}'
+        fi
+        if checkTruthy "$configValue_head_store_enabled"; then
+            printf 'head:\n'
+            printf '    ref: %s\n' "$( getHeadReference | escapeYamlValue )"
+            printf '    commitId: %s\n' "$( getHeadCommitId | escapeYamlValue )"
+        fi
+        if checkTruthy "$configValue_stagingarea_store_enabled"; then
+            printf 'stagingArea:\n'
+            printf '    treeId: %s\n' "$( git write-tree | escapeYamlValue )"
+        fi
+        if checkTruthy "$configValue_workingtree_store_enabled"; then (
+            printf 'workingTree:\n'
+            printf '    treeId: %s\n' "$( getWorkingtreeTreeId | escapeYamlValue )"
+        ) fi
+    )"
+}
 
 # TODO verbose/error messages?
 
