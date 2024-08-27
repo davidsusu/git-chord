@@ -478,7 +478,9 @@ catYamlLinesOrElse() { # stdin, $1: fallbackString
     awk --assign fallback="$1" '{ printf "\n%s",$0 } END { if (NR == 0) { print fallback } else { print "" } }'
 }
 
-catYamlMultiline() { # $1: value, $2: indentLength
+escapeYamlValuePossiblyMultiline() { # $1: value, $2: indentLength
+    # in case of multiline content, YAML appends a trailing newline
+    # which is unavoidable and must be considered during reading
     if [ "$( printf '%s' "$1" | wc -l )" -eq 0 ]; then
         printf '%s\n' "$( printf '%s\n' "$1" | escapeYamlValue )"
     else
@@ -573,7 +575,7 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
                     printf '    %s:\n' "$( printf '%s\n' "$annotatedTagName" | escapeYamlValue )"
                     printf '        tagId: %s\n' "$( printf '%s\n' "$tagId" | escapeYamlValue )"
                     printf '        commitId: %s\n' "$( echo '???' | escapeYamlValue )"
-                    printf '        message: %s\n' "$( catYamlMultiline "$( git tag --list "$annotatedTagName" -n99 --format='%(contents)' | head -n -1 )" 12 )"
+                    printf '        message: %s\n' "$( escapeYamlValuePossiblyMultiline "$( git tag --list "$annotatedTagName" -n99 --format='%(contents)' | head -n -1 )" 12 )"
                 done |
                 catYamlLinesOrElse '{}'
         fi
