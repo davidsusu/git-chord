@@ -56,6 +56,9 @@ defaults false # Enables default mode, the default configuration will be used an
 all false # Enables the operation for all related objects
 ' | tail -n +2 )"
 
+
+## string and value functions ##
+
 checkStartsWith() { # $1: contextString, $2: prefixToCheck
     case "$1" in
         "$2"*) return 0 ;;
@@ -116,11 +119,14 @@ printNlIf() { # $1: isVerbose
     fi
 }
 
+
+## configuration functions ##
+
 getArgumentKey() { # $1: arg
     normalizeKey "$( printf '%s\n' "$1" | cut -d '=' -f 1 | sed -E 's/\-\-(no\-)?//i' )"
 }
 
-getArgumentValue() ( # $1: arg, $2: isBool, subshell local: $candidate
+getArgumentValue() ( # $1: arg, $2: isBool
     candidate="$( printf '%s\n' "$1" | cut -d '=' -s -f 2- )"
     if [ -z "$candidate" ] && [ -n "$2" ]; then
         if checkStartsWith "$1" '--no-'; then
@@ -144,7 +150,7 @@ isArgumentNextExpected() { # $1: arg, $2: isBool
     fi
 }
 
-checkConfigKey() ( # $1: config, $2: key, $3: messagePrefix, subshell local: $line
+checkConfigKey() ( # $1: config, $2: key, $3: messagePrefix
     while IFS= read -r line; do
         if checkStartsWith "$line" "${2} "; then
             return 0
@@ -156,7 +162,7 @@ EOF
     return 1
 )
 
-getConfigValue() ( # $1: config, $2: key, subshell local: $line
+getConfigValue() ( # $1: config, $2: key
     printf '%s\n' "$1" | while IFS= read -r line; do
         if checkStartsWith "$line" "${2} "; then
             printf '%s\n' "$line" | cut -d ' ' -s -f 2-
@@ -165,7 +171,7 @@ getConfigValue() ( # $1: config, $2: key, subshell local: $line
     done
 )
 
-setConfigValue() ( # $1: config, $2: key, $3: newValue, subshell local: $found, $line
+setConfigValue() ( # $1: config, $2: key, $3: newValue
     found=''
     while IFS= read -r line; do
         if checkStartsWith "$line" "${2} "; then
@@ -181,6 +187,74 @@ EOF
         printf '%s %s\n' "$2" "$3"
     fi
 )
+
+
+## YAML functions ##
+
+extractYamlSubLines() ( # stdin, $1: keyLinePrefix
+    found=''
+    while IFS= read -r line; do
+        if [ -n "$found" ]; then
+            if printf '%s\n' "$line" | grep -qE '^    '; then
+                printf '%s\n' "$line" | sed -E 's/^    //'
+            else
+                break
+            fi
+        elif checkStartsWith "$line" "$1"; then
+            found='1'
+        fi
+    done
+)
+
+quoteYamlValue() { # stdin
+    printf "'%s'\n" "$( sed -E "s/'/''/" )"
+}
+
+unquoteYamlValue() { # stdin
+    sed -E "s/^'//; s/'$//; s/''/'/g"
+}
+
+extractYamlValue() ( # stdin, $1: keyLinePrefix
+    found=''
+    while IFS= read -r line; do
+        if [ -n "$found" ]; then
+            if printf '%s\n' "$line" | grep -qE '^    '; then
+                printf '%s\n' "$line" | sed -E 's/^    //'
+            else
+                break
+            fi
+        elif checkStartsWith "$line" "$1"; then
+            afterString="$( printf '%s\n' "$line" | sed -E "s/^.{$( printf '%s' "$1" | wc -m )}\\s*//; s/\\s*$//" )"
+            if [ "$afterString" = '|+' ]; then
+                found='1'
+            elif [ -n "$afterString" ]; then
+                printf '%s\n' "$afterString" | unquoteYamlValue
+                break
+            else
+                echo ''
+                break
+            fi
+        fi
+    done
+)
+
+catYamlLinesOrElse() { # stdin, $1: fallbackString
+    awk --assign fallback="$1" '{ printf "\n%s",$0 } END { if (NR == 0) { print fallback } else { print "" } }'
+}
+
+quoteYamlValuePossiblyMultiline() { # $1: value, $2: indentLength
+    # in case of multiline content, YAML appends a trailing newline
+    # which is unavoidable and must be considered during reading
+    if [ "$( printf '%s' "$1" | wc -l )" -eq 0 ]; then
+        printf '%s\n' "$( printf '%s\n' "$1" | quoteYamlValue )"
+    else
+        printf '|+\n'
+        printf '%s\n' "$1" | while IFS= read -r line; do
+            printf "%-${2}s%s\\n" '' "$line"
+        done
+    fi
+}
+
 
 defaults=$( printf '%s' "$OPTIONS" | sed -E 's/ #[^#]*//' )
 config="$defaults"
@@ -301,7 +375,7 @@ getLength() { # $1: string
     fi
 }
 
-padLeft() { # $1: string, $2: length, subshell local: $fieldLength, $stringLength, $padLength
+padLeft() { # $1: string, $2: length
     if checkTruthy "$configValue_color"; then
         (
             printf '%s' "$1"
@@ -325,7 +399,7 @@ escapeHtml() { # stdin
     sed -E 's/&/\&amp;/g; s/"/\&quot;/g; s/</\&lt;/g; s/>/\&gt;/g'
 }
 
-escapeMarkdown() ( # stdin, subshell local: $inCodeBlock
+escapeMarkdown() ( # stdin
     inCodeBlock=0
     sed -E 's/$/\n/; s/`/\n/g' | while IFS= read -r token; do
         inCodeBlock=$(( 1 - inCodeBlock ))
@@ -470,27 +544,6 @@ printOptionShortDescription() { # $1: optionName, $2: defaultValue, $3: optionDe
     fi
 }
 
-escapeYamlValue() { # stdin
-    printf "'%s'\n" "$( sed -E "s/'/''/" )"
-}
-
-catYamlLinesOrElse() { # stdin, $1: fallbackString
-    awk --assign fallback="$1" '{ printf "\n%s",$0 } END { if (NR == 0) { print fallback } else { print "" } }'
-}
-
-escapeYamlValuePossiblyMultiline() { # $1: value, $2: indentLength
-    # in case of multiline content, YAML appends a trailing newline
-    # which is unavoidable and must be considered during reading
-    if [ "$( printf '%s' "$1" | wc -l )" -eq 0 ]; then
-        printf '%s\n' "$( printf '%s\n' "$1" | escapeYamlValue )"
-    else
-        printf '|+\n'
-        printf '%s\n' "$1" | while IFS= read -r line; do
-            printf "%-${2}s%s\\n" '' "$line"
-        done
-    fi
-}
-
 getHeadReference() {
     git symbolic-ref --short HEAD 2>/dev/null
 }
@@ -555,14 +608,14 @@ getWorkingtreeTreeId() ( # subshell local: $gitDir, $tmpGitDir, $$treeId, $linki
 printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commitId, $lightweightTagName, $tmpDir
     # stdin is holded back until all possible stderr was printed
     printf '%s\n' "$(
-        printf 'timestamp: %s\n' "$( date --utc +'%Y-%m-%dT%H:%M:%SZ' | escapeYamlValue )"
+        printf 'timestamp: %s\n' "$( date --utc +'%Y-%m-%dT%H:%M:%SZ' | quoteYamlValue )"
         if checkTruthy "$configValue_branches_store_enabled"; then
             printf 'branches: '
             git for-each-ref --format='%(refname:short)' refs/heads |
                 awk --assign search="$configValue_trackers_prefix" 'substr($0, 1, length(search)) != search { print }' |
                 grep -E "^${configValue_branches_store_regex}$" |
                 while IFS= read -r branchName; do
-                    printf '    %s: %s\n' "$( printf '%s\n' "$branchName" | escapeYamlValue )" "$( git rev-parse "$branchName" | escapeYamlValue )"
+                    printf '    %s: %s\n' "$( printf '%s\n' "$branchName" | quoteYamlValue )" "$( git rev-parse "$branchName" | quoteYamlValue )"
                 done |
                 catYamlLinesOrElse '{}'
         fi
@@ -572,10 +625,10 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
                 grep -E '\w+ tag\s+refs/tags/'"$configValue_annotatedtags_store_regex"'$' |
                 sed -E 's/ .*\// /' |
                 while IFS=' ' read -r tagId annotatedTagName; do
-                    printf '    %s:\n' "$( printf '%s\n' "$annotatedTagName" | escapeYamlValue )"
-                    printf '        tagId: %s\n' "$( printf '%s\n' "$tagId" | escapeYamlValue )"
-                    printf '        commitId: %s\n' "$( echo '???' | escapeYamlValue )"
-                    printf '        message: %s\n' "$( escapeYamlValuePossiblyMultiline "$( git tag --list "$annotatedTagName" -n99 --format='%(contents)' | head -n -1 )" 12 )"
+                    printf '    %s:\n' "$( printf '%s\n' "$annotatedTagName" | quoteYamlValue )"
+                    printf '        tagId: %s\n' "$( printf '%s\n' "$tagId" | quoteYamlValue )"
+                    printf '        commitId: %s\n' "$( git rev-parse "$tagId"'^{commit}' | quoteYamlValue )"
+                    printf '        message: %s\n' "$( quoteYamlValuePossiblyMultiline "$( git tag --list "$annotatedTagName" -n99 --format='%(contents)' | head -n -1 )" 12 )"
                 done |
                 catYamlLinesOrElse '{}'
         fi
@@ -591,16 +644,16 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
         fi
         if checkTruthy "$configValue_head_store_enabled"; then
             printf 'head:\n'
-            printf '    ref: %s\n' "$( getHeadReference | escapeYamlValue )"
-            printf '    commitId: %s\n' "$( getHeadCommitId | escapeYamlValue )"
+            printf '    ref: %s\n' "$( getHeadReference | quoteYamlValue )"
+            printf '    commitId: %s\n' "$( getHeadCommitId | quoteYamlValue )"
         fi
         if checkTruthy "$configValue_stagingarea_store_enabled"; then
             printf 'stagingArea:\n'
-            printf '    treeId: %s\n' "$( git write-tree | escapeYamlValue )"
+            printf '    treeId: %s\n' "$( git write-tree | quoteYamlValue )"
         fi
         if checkTruthy "$configValue_workingtree_store_enabled"; then (
             printf 'workingTree:\n'
-            printf '    treeId: %s\n' "$( getWorkingtreeTreeId | escapeYamlValue )"
+            printf '    treeId: %s\n' "$( getWorkingtreeTreeId | quoteYamlValue )"
         ) fi
     )"
 }
@@ -874,6 +927,19 @@ case "$command" in
         exit 0
         ;;
     snapshot)
+        stateYaml="$( printState )"
+        if checkTruthy "$configValue_branches_apply_enabled"; then
+        
+            # TODO
+            printf '%s\n' "$stateYaml"
+            echo '-----------------------------------'
+            printf '%s\n' "$stateYaml" | extractYamlValue 'timestamp:'
+            printf '%s\n' "$branches" | extractYamlSubLines 'branches:' | extractYamlValue "'main':"
+            printf '%s\n' "$stateYaml" | extractYamlSubLines 'head:' | extractYamlValue 'ref:'
+            exit 1
+            
+        fi
+        
         printf '%sERROR: %s%s\n' "$formatError" 'The snapshot command is not implemented yet' "$formatErrorEnd" >&2
         exit 1
         ;;
