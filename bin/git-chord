@@ -934,7 +934,7 @@ case "$command" in
             printf '%s\n' "$stateYaml"
             echo '-----------------------------------'
             printf '%s\n' "$stateYaml" | extractYamlValue 'timestamp:'
-            printf '%s\n' "$branches" | extractYamlSubLines 'branches:' | extractYamlValue "'main':"
+            printf '%s\n' "$stateYaml" | extractYamlSubLines 'branches:' | extractYamlValue "'master':"
             printf '%s\n' "$stateYaml" | extractYamlSubLines 'head:' | extractYamlValue 'ref:'
             exit 1
             
