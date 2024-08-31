@@ -58,8 +58,11 @@ all false # Enables the operation for all related objects
 
 STATE_FILE='state.yaml'
 
+NL="
+"
 
-## string and value functions ##
+
+## string manipulation functions ##
 
 checkStartsWith() { # $1: contextString, $2: prefixToCheck
     case "$1" in
@@ -88,7 +91,7 @@ normalizeKey() { # $1: rawKey
     printf '%s\n' "$1" | sed -E 's/^\-\-(no\-)?//i' | tr '-' '.' | tr '[:upper:]' '[:lower:]'
 }
 
-escapeValue() {
+escapeValue() { # $1: value
     printf '%s\n' "$1" | sed "s/'/'\\\\''/g"
 }
 
@@ -115,11 +118,24 @@ checkTruthy() { # $1: valueToCheck
     esac
 }
 
+
+## miscellaneous functions ##
+
 printNlIf() { # $1: isVerbose
     if checkTruthy "$1"; then
         echo ''
     fi
 }
+
+deduplicateLinesStable() ( # stdin
+    output=''
+    while IFS= read -r line; do
+        if ! printf '%s' "$output" | grep -Fxq "$line"; then
+            output="${output}${line}${NL}"
+        fi
+    done
+    printf '%s' "$output"
+)
 
 
 ## configuration functions ##
@@ -199,7 +215,7 @@ extractYamlSubLines() ( # stdin, $1: keyLinePrefix
         if [ -n "$found" ]; then
             if printf '%s\n' "$line" | grep -qE '^    '; then
                 printf '%s\n' "$line" | sed -E 's/^    //'
-            else
+            elif [ -n "$line" ]; then
                 break
             fi
         elif checkStartsWith "$line" "$1"; then
@@ -477,9 +493,9 @@ printParagraph() { # $@: content
 printList() { # $@: items
     while [ "$#" -gt '0' ]; do
         if checkTruthy "$configValue_markdown"; then
-            printf '- %s' "$1"
+            printf '- %s\n' "$1"
         else
-            printf '   %s*%s %s' "$formatBold" "$formatBoldEnd" "$1"
+            printf '   %s*%s %s\n' "$formatBold" "$formatBoldEnd" "$1"
         fi
         shift
     done
@@ -959,20 +975,27 @@ case "$command" in
         exit 0
         ;;
     snapshot)
-        stateYaml="$( printState )"
+        stateYaml="$( printState )${NL}"
         targetBranch="${configValue_trackers_prefix}${configValue_trackers_name}"
         firstParentCommitId="$( git rev-parse --verify --quiet "$targetBranch" )"
         if [ -z "$firstParentCommitId" ]; then
             emptyTreeId="$( git hash-object -t tree /dev/null )"
             firstParentCommitId="$( git commit-tree "$emptyTreeId" -m "Tracker root commit for ${targetBranch}" )"
         fi
-        parentCommitIds="$firstParentCommitId"
-        if checkTruthy "$configValue_branches_apply_enabled"; then
+        parentCommitIds="${firstParentCommitId}${NL}"
+        if checkTruthy "$configValue_branches_store_enabled"; then
+            printf '%s\n' "$stateYaml" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' ' | while IFS=' ' read -r branchName commitId; do
+                parentCommitIds="${parentCommitIds}${commitId}${NL}"
+            done
+        fi
+        if checkTruthy "$configValue_annotatedtag_store_enabled"; then
+            printf '' # TODO
+        fi
+        if checkTruthy "$configValue_lightweighttags_store_enabled"; then
+            printf '' # TODO
             
             # TODO
             printf '%s\n' "$stateYaml"
-            echo '-----------------------------------'
-            printf '%s\n' "$stateYaml" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' '
             echo '-----------------------------------'
             annotatedTagsYaml="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'annotatedTags:' )"
             printf '%s\n' "$annotatedTagsYaml" | getYamlKeyPrefixes | while IFS= read -r keyPrefix; do
@@ -988,8 +1011,19 @@ case "$command" in
             exit 1
             
         fi
-        # TODO: fill parentCommitIds
-        
+        if checkTruthy "$configValue_head_store_enabled"; then
+            commitId="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'head:' | extractYamlValue 'commitId:' )"
+            if [ -n "$commitId" ]; then
+                parentCommitIds="${parentCommitIds}${commitId}${NL}"
+            fi
+        fi
+        if checkTruthy "$configValue_stagingarea_store_enabled"; then
+            printf '' # TODO
+        fi
+        if checkTruthy "$configValue_workingtree_store_enabled"; then
+            printf '' # TODO
+        fi
+        parentCommitIds="$( printf '%s\n' "$parentCommitIds" | deduplicateLinesStable )"
         if checkTruthy "$configValue_verbose"; then
             printTitle 'Snapshot'
             printParagraph 'Target branch: (`'"$targetBranch"'`)'
