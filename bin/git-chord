@@ -658,7 +658,7 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
     printf '%s\n' "$(
         printf 'timestamp: %s\n' "$( date --utc +'%Y-%m-%dT%H:%M:%SZ' | quoteYamlValue )"
         if checkTruthy "$configValue_branches_store_enabled"; then
-            printf 'branches: '
+            printf 'branches:'
             git for-each-ref --format='%(refname:short)' refs/heads |
                 awk --assign search="$configValue_trackers_prefix" 'substr($0, 1, length(search)) != search { print }' |
                 grep -E "^${configValue_branches_store_regex}$" |
@@ -668,7 +668,7 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
                 catYamlLinesOrElse '{}'
         fi
         if checkTruthy "$configValue_annotatedtags_store_enabled"; then
-            printf 'annotatedTags: '
+            printf 'annotatedTags:'
             git for-each-ref refs/tags |
                 grep -E '\w+ tag\s+refs/tags/'"$configValue_annotatedtags_store_regex"'$' |
                 sed -E 's/ .*\// /' |
@@ -681,12 +681,12 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
                 catYamlLinesOrElse '{}'
         fi
         if checkTruthy "$configValue_lightweighttags_store_enabled"; then
-            printf 'lightweightTags: '
+            printf 'lightWeightTags:'
             git for-each-ref refs/tags |
                 grep -E '\w+ commit\s+refs/tags/'"$configValue_lightweighttags_store_regex"'$' |
                 sed -E 's/ .*\// /' |
                 while IFS=' ' read -r commitId lightweightTagName; do
-                    printf '    %s: %s\n' "$lightweightTagName" "$commitId"
+                    printf '    %s: %s\n' "$( printf '%s\n' "$lightweightTagName" | quoteYamlValue )" "$commitId"
                 done |
                 catYamlLinesOrElse '{}'
         fi
@@ -980,7 +980,7 @@ case "$command" in
         firstParentCommitId="$( git rev-parse --verify --quiet "$targetBranch" )"
         if [ -z "$firstParentCommitId" ]; then
             emptyTreeId="$( git hash-object -t tree /dev/null )"
-            firstParentCommitId="$( git commit-tree "$emptyTreeId" -m "Tracker root commit for ${targetBranch}" )"
+            firstParentCommitId="$( git commit-tree "$emptyTreeId" -m "Chord tracker root commit for ${targetBranch}" )"
         fi
         parentCommitIds="${firstParentCommitId}${NL}"
         if checkTruthy "$configValue_branches_store_enabled"; then
@@ -992,24 +992,9 @@ case "$command" in
             printf '' # TODO
         fi
         if checkTruthy "$configValue_lightweighttags_store_enabled"; then
-            printf '' # TODO
-            
-            # TODO
-            printf '%s\n' "$stateYaml"
-            echo '-----------------------------------'
-            annotatedTagsYaml="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'annotatedTags:' )"
-            printf '%s\n' "$annotatedTagsYaml" | getYamlKeyPrefixes | while IFS= read -r keyPrefix; do
-                tagName="$( printf '%s\n' "$keyPrefix" | extractYamlKey )"
-                commitId="$( printf '%s\n' "$annotatedTagsYaml" | extractYamlSubLines "$keyPrefix" | extractYamlValue 'commitId:' )"
-                printf '%s --> %s\n' "$tagName" "$commitId"
+            printf '%s\n' "$stateYaml" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' | while IFS=' ' read -r branchName commitId; do
+                parentCommitIds="${parentCommitIds}${commitId}${NL}"
             done
-            echo '-----------------------------------'
-            printf 'Target branch: %s\n' "$targetBranch"
-            printf 'First-parent commit id: %s\n' "$firstParentCommitId"
-            printf '%s\n' "$stateYaml" | extractYamlValue 'timestamp:'
-            printf '%s\n' "$stateYaml" | extractYamlSubLines 'head:' | extractYamlValue 'ref:'
-            exit 1
-            
         fi
         if checkTruthy "$configValue_head_store_enabled"; then
             commitId="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'head:' | extractYamlValue 'commitId:' )"
@@ -1018,10 +1003,14 @@ case "$command" in
             fi
         fi
         if checkTruthy "$configValue_stagingarea_store_enabled"; then
-            printf '' # TODO
+            treeId="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'stagingArea:' | extractYamlValue 'treeId:' )"
+            commitId="$( git commit-tree "$emptyTreeId" -m "Chord stating area state" )"
+            parentCommitIds="${parentCommitIds}${commitId}${NL}"
         fi
         if checkTruthy "$configValue_workingtree_store_enabled"; then
-            printf '' # TODO
+            treeId="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'workingTree:' | extractYamlValue 'treeId:' )"
+            commitId="$( git commit-tree "$emptyTreeId" -m "Chord working tree state" )"
+            parentCommitIds="${parentCommitIds}${commitId}${NL}"
         fi
         parentCommitIds="$( printf '%s\n' "$parentCommitIds" | deduplicateLinesStable )"
         if checkTruthy "$configValue_verbose"; then
@@ -1035,14 +1024,14 @@ case "$command" in
         if checkTruthy "$configValue_dryrun"; then
             exit 2
         fi
+        timestamp="$( printf '%s\n' "$stateYaml" | extractYamlValue 'timestamp:' )"
         stateBlobId="$( printf '%s\n' "$stateYaml" | git hash-object -w --stdin )"
-        stateTreeId="$( printf '%s %s %s\t%s\n' '100644' 'blob' "$STATE_FILE" "$stateBlobId" | git mktree )"
+        stateTreeId="$( printf '%s %s %s\t%s\n' '100644' 'blob' "$stateBlobId" "$STATE_FILE" | git mktree )"
         
-        printf '%s\n' "$stateTreeId"
-        exit 1
+        # TODO: add parent ids
         
-        printf '%sERROR: %s%s\n' "$formatError" 'The snapshot command is not implemented yet' "$formatErrorEnd" >&2
-        exit 1
+        stateCommitId="$( git commit-tree "$stateTreeId" -m "Chord repository state at ${timestamp}" )"
+        git update-ref refs/heads/"$targetBranch" "$stateCommitId"
         ;;
     apply)
         printf '%sERROR: %s%s\n' "$formatError" 'The apply command is not implemented yet' "$formatErrorEnd" >&2
