@@ -19,7 +19,7 @@ DEFAULT_COMMAND='snapshot'
 
 OPTIONS="$( printf '%s' '
 trackers.prefix chord/ # Sets the tracker branch prefix
-trackers.default main # Sets the default tracker branch name
+trackers.name main # Sets the tracker branch name
 trackers.remotes.default origin # Sets the default remote name for tracker branches
 trackers.remotes.allowautoadd true # Allows automatically adding the default remote if necessary
 branches.store.enabled true # Enables saving state of tracked branches
@@ -55,6 +55,8 @@ markdown false # Enables markdown mode, output will be formatted as a markdown d
 defaults false # Enables default mode, the default configuration will be used and printed (forcefully)
 all false # Enables the operation for all related objects
 ' | tail -n +2 )"
+
+STATE_FILE='state.yaml'
 
 
 ## string and value functions ##
@@ -224,7 +226,7 @@ extractYamlValue() ( # stdin, $1: keyLinePrefix
                 break
             fi
         elif checkStartsWith "$line" "$1"; then
-            afterString="$( printf '%s\n' "$line" | sed -E "s/^.{$( printf '%s' "$1" | wc -m )}\\s*//; s/\\s*$//" )"
+            afterString="$( printf '%s\n' "$line" | sed -E 's/^.{'"$( printf '%s' "$1" | wc -m )}\\s*//; s/\\s*$//" )"
             if [ "$afterString" = '|+' ]; then
                 found='1'
             elif [ -n "$afterString" ]; then
@@ -235,6 +237,24 @@ extractYamlValue() ( # stdin, $1: keyLinePrefix
                 break
             fi
         fi
+    done
+)
+
+getYamlKeyPrefixes() { # stdin
+    grep -Eo "^([^': ]+|'([^']|'')*'):" 
+}
+
+extractYamlKey() { # stdin
+    sed -E 's/:$//' | unquoteYamlValue
+}
+
+reformatYamlKeyValueLines() ( # stdin, $1: outSeparator
+    while IFS= read -r line; do
+        keyPrefix="$( printf '%s\n' "$line" | getYamlKeyPrefixes )"
+        key="$( printf '%s\n' "$keyPrefix" | extractYamlKey )"
+        afterString="$( printf '%s\n' "$line" | sed -E 's/^.{'"$( printf '%s' "$keyPrefix" | wc -m )}\\s*//; s/\\s*$//" )"
+        value="$( printf '%s\n' "$afterString" | unquoteYamlValue )"
+        printf '%s%s%s\n' "$key" "$1" "$value"
     done
 )
 
@@ -429,7 +449,7 @@ printTitle() { # $1: title
         printf '# %s\n\n' "$1" | escapeMarkdown
     else
         printNlIf "$configValue_verbose"
-        printf '%s%s%s\n\n' "$formatBold" "$1" "$formatBoldEnd"s
+        printf '%s%s%s\n\n' "$formatBold" "$1" "$formatBoldEnd"
     fi
 }
 
@@ -454,7 +474,19 @@ printParagraph() { # $@: content
     echo ''
 }
 
-printCodeBlock() { # $@: lines
+printList() { # $@: items
+    while [ "$#" -gt '0' ]; do
+        if checkTruthy "$configValue_markdown"; then
+            printf '- %s' "$1"
+        else
+            printf '   %s*%s %s' "$formatBold" "$formatBoldEnd" "$1"
+        fi
+        shift
+    done
+    echo ''
+}
+
+printCodeBlock() { # $@: content
     if checkTruthy "$configValue_markdown"; then
         printf '```\n'
         printf '%s\n' "$@"
@@ -928,17 +960,52 @@ case "$command" in
         ;;
     snapshot)
         stateYaml="$( printState )"
+        targetBranch="${configValue_trackers_prefix}${configValue_trackers_name}"
+        firstParentCommitId="$( git rev-parse --verify --quiet "$targetBranch" )"
+        if [ -z "$firstParentCommitId" ]; then
+            emptyTreeId="$( git hash-object -t tree /dev/null )"
+            firstParentCommitId="$( git commit-tree "$emptyTreeId" -m "Tracker root commit for ${targetBranch}" )"
+        fi
+        parentCommitIds="$firstParentCommitId"
         if checkTruthy "$configValue_branches_apply_enabled"; then
-        
+            
             # TODO
             printf '%s\n' "$stateYaml"
             echo '-----------------------------------'
+            printf '%s\n' "$stateYaml" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' '
+            echo '-----------------------------------'
+            annotatedTagsYaml="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'annotatedTags:' )"
+            printf '%s\n' "$annotatedTagsYaml" | getYamlKeyPrefixes | while IFS= read -r keyPrefix; do
+                tagName="$( printf '%s\n' "$keyPrefix" | extractYamlKey )"
+                commitId="$( printf '%s\n' "$annotatedTagsYaml" | extractYamlSubLines "$keyPrefix" | extractYamlValue 'commitId:' )"
+                printf '%s --> %s\n' "$tagName" "$commitId"
+            done
+            echo '-----------------------------------'
+            printf 'Target branch: %s\n' "$targetBranch"
+            printf 'First-parent commit id: %s\n' "$firstParentCommitId"
             printf '%s\n' "$stateYaml" | extractYamlValue 'timestamp:'
-            printf '%s\n' "$stateYaml" | extractYamlSubLines 'branches:' | extractYamlValue "'master':"
             printf '%s\n' "$stateYaml" | extractYamlSubLines 'head:' | extractYamlValue 'ref:'
             exit 1
             
         fi
+        # TODO: fill parentCommitIds
+        
+        if checkTruthy "$configValue_verbose"; then
+            printTitle 'Snapshot'
+            printParagraph 'Target branch: (`'"$targetBranch"'`)'
+            printSubtitle 'Parent commit ids'
+            printList $parentCommitIds
+            printSubtitle 'State'
+            printCodeBlock "$stateYaml"
+        fi
+        if checkTruthy "$configValue_dryrun"; then
+            exit 2
+        fi
+        stateBlobId="$( printf '%s\n' "$stateYaml" | git hash-object -w --stdin )"
+        stateTreeId="$( printf '%s %s %s\t%s\n' '100644' 'blob' "$STATE_FILE" "$stateBlobId" | git mktree )"
+        
+        printf '%s\n' "$stateTreeId"
+        exit 1
         
         printf '%sERROR: %s%s\n' "$formatError" 'The snapshot command is not implemented yet' "$formatErrorEnd" >&2
         exit 1
