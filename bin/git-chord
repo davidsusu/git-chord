@@ -1027,10 +1027,8 @@ case "$command" in
         timestamp="$( printf '%s\n' "$stateYaml" | extractYamlValue 'timestamp:' )"
         stateBlobId="$( printf '%s\n' "$stateYaml" | git hash-object -w --stdin )"
         stateTreeId="$( printf '%s %s %s\t%s\n' '100644' 'blob' "$stateBlobId" "$STATE_FILE" | git mktree )"
-        
-        # TODO: add parent ids
-        
-        stateCommitId="$( git commit-tree "$stateTreeId" -m "Chord repository state at ${timestamp}" )"
+        stateParentIdsParams=$( printf '%s' "$parentCommitIds" | sed -E 's/^/-p /' )
+        stateCommitId="$( git commit-tree "$stateTreeId" -m "Chord repository state at ${timestamp}" $stateParentIdsParams )"
         git update-ref refs/heads/"$targetBranch" "$stateCommitId"
         ;;
     apply)
