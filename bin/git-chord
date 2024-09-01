@@ -771,9 +771,9 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             printSubtitle 'Description:'
             printParagraph \
                 'Creates and saves a snapshot of the entire state of the repository, based on the configuration.' \
-                'If you use no parameters, the default tracker branch name will be used with the default prefix.' \
+                'If you use no parameters, the default tracker branch name will be used.' \
                 'If you use the (`<name>`) parameter, this branch name will be used with the default prefix.' \
-                'If you use the '\''(`-`)'\'' parameter,' \
+                'If you use the '\''(`-`)'\'' argument,' \
                 'then the (`<branch>`) parameter will be interpreted as a full branch name.' \
                 'In any case, the tracker branch will be created if not exist.' \
             ;
@@ -800,7 +800,26 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             ;
             exit 0
             ;;
-        # TODO: show
+        # TODO: apply
+        show)
+            printTitle 'git chord show'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord show [<name>] [-<n>]'
+            printCodeBlock 'git chord show - <revision>'
+            printSubtitle 'Example:'
+            printCodeBlock 'git chord show -3'
+            printSubtitle 'Description:'
+            printParagraph \
+                'Prints a stored state in YAML format.' \
+                'If you use no parameters, last commit on the default tracker branch will be retrieved.' \
+                'If you use the (`<name>`) parameter, this branch name, with the default prefix, will be retrieved.' \
+                'In these cases, if you use the (`-<n>`) parameter, where (`<n>`) is a whole number greater than 1,' \
+                'you will refer to the nth parent on the first-parent history.' \
+                'If you use the '\''(`-`)'\'' argument,' \
+                'then the (`<revision>`) parameter will be interpreted as an arbitrary committish' \
+                'It will indicate an error if the specified revision is not a snapshot commit.' \
+            ;
+            ;;
         # TODO: diff
         # TODO: push
         # TODO: pull
@@ -977,6 +996,9 @@ case "$command" in
     snapshot)
         stateYaml="$( printState )${NL}"
         targetBranch="${configValue_trackers_prefix}${configValue_trackers_name}"
+        
+        # TODO: targetBranch by options
+        
         firstParentCommitId="$( git rev-parse --verify --quiet "$targetBranch" )"
         if [ -z "$firstParentCommitId" ]; then
             emptyTreeId="$( git hash-object -t tree /dev/null )"
@@ -1013,7 +1035,7 @@ case "$command" in
             parentCommitIds="${parentCommitIds}${commitId}${NL}"
         fi
         parentCommitIds="$( printf '%s\n' "$parentCommitIds" | deduplicateLinesStable )"
-        if checkTruthy "$configValue_verbose"; then
+        if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
             printTitle 'Snapshot'
             printParagraph 'Target branch: (`'"$targetBranch"'`)'
             printSubtitle 'Parent commit ids'
@@ -1036,12 +1058,51 @@ case "$command" in
         exit 1
         ;;
     state)
-        printState
+        if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
+            printTitle 'State'
+            printCodeBlock "$( printState )"
+        else
+            printState
+        fi
         exit 0
         ;;
     show)
-        printf '%sERROR: %s%s\n' "$formatError" 'The show command is not implemented yet' "$formatErrorEnd" >&2
-        exit 1
+        nameArg="$( getNthLine "$nonOptArgs" 1 )"
+        if [ -z "$nameArg" ]; then
+            stateRevision="${configValue_trackers_prefix}${configValue_trackers_name}"
+        elif [ "$nameArg" = '-' ]; then
+            revisionArg="$( getNthLine "$nonOptArgs" 2 )"
+            if [ -n "$revisionArg" ]; then
+                stateRevision="$revisionArg"
+            else
+                printf '%sERROR: %s%s\n' "$formatError" 'No revision was specified' "$formatErrorEnd" >&2
+                exit 1
+            fi
+        elif checkStartsWith "$nameArg" '-'; then
+            stateRevision="${configValue_trackers_prefix}${configValue_trackers_name}$( printf '%s\n' "$nameArg" | sed -E 's/^\-/~/' )"
+        else
+            stateRevision="${configValue_trackers_prefix}${nameArg}"
+            offsetArg="$( getNthLine "$nonOptArgs" 2 )"
+            if checkStartsWith "$offsetArg" '-'; then
+                stateRevision="${stateRevision}$( printf '%s\n' "$offsetArg" | sed -E 's/^\-/~/' )"
+            elif [ -n "$offsetArg" ]; then
+                printf '%sERROR: %s: %s%s\n' "$formatError" 'Illegal offset argument' "$offsetArg" "$formatErrorEnd" >&2
+                exit 1
+            fi
+        fi
+        if ! stateYaml="$( git show "${stateRevision}:${STATE_FILE}" 2>/dev/null )"; then
+            printf '%sERROR: %s %s%s\n' "$formatError" 'Failed to load' "$STATE_FILE" "$formatErrorEnd" >&2
+            exit 1
+        fi
+        if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
+            printTitle 'Show stored state snapshot'
+            printParagraph "Tracker revision: (\`${stateRevision}\`)"
+            printSubtitle 'State'
+            printCodeBlock "$stateYaml"
+        else
+            printf '%s\n' "$stateYaml"
+        fi
+        exit 0
         ;;
     diff)
         printf '%sERROR: %s%s\n' "$formatError" 'The diff command is not implemented yet' "$formatErrorEnd" >&2
