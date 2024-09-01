@@ -995,10 +995,22 @@ case "$command" in
         ;;
     snapshot)
         stateYaml="$( printState )${NL}"
-        targetBranch="${configValue_trackers_prefix}${configValue_trackers_name}"
-        
-        # TODO: targetBranch by options
-        
+        nameArg="$( getNthLine "$nonOptArgs" 1 )"
+        if [ -z "$nameArg" ]; then
+            targetBranch="${configValue_trackers_prefix}${configValue_trackers_name}"
+        elif [ "$nameArg" = '-' ]; then
+            branchArg="$( getNthLine "$nonOptArgs" 2 )"
+            if [ -n "$branchArg" ]; then
+                targetBranch="$branchArg"
+            else
+                printf '%sERROR: %s%s\n' "$formatError" 'No branch name was specified' "$formatErrorEnd" >&2
+                exit 1
+            fi
+        elif checkStartsWith "$nameArg" '-'; then
+            stateRevision="${configValue_trackers_prefix}${configValue_trackers_name}$( printf '%s\n' "$nameArg" | sed -E 's/^\-/~/' )"
+        else
+            targetBranch="${configValue_trackers_prefix}${nameArg}"
+        fi
         firstParentCommitId="$( git rev-parse --verify --quiet "$targetBranch" )"
         if [ -z "$firstParentCommitId" ]; then
             emptyTreeId="$( git hash-object -t tree /dev/null )"
@@ -1006,17 +1018,27 @@ case "$command" in
         fi
         parentCommitIds="${firstParentCommitId}${NL}"
         if checkTruthy "$configValue_branches_store_enabled"; then
-            printf '%s\n' "$stateYaml" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' ' | while IFS=' ' read -r branchName commitId; do
+            while IFS=' ' read -r branchName commitId; do
                 parentCommitIds="${parentCommitIds}${commitId}${NL}"
-            done
+            done <<EOF
+$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' ' )
+EOF
         fi
-        if checkTruthy "$configValue_annotatedtag_store_enabled"; then
-            printf '' # TODO
+        if checkTruthy "$configValue_annotatedtags_store_enabled"; then
+            annotatedTagsYaml="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'annotatedTags:' )"
+            while IFS= read -r keyPrefix; do
+                commitId="$( printf '%s\n' "$annotatedTagsYaml" | extractYamlSubLines | extractYamlValue "commitId:" )"
+                parentCommitIds="${parentCommitIds}${commitId}${NL}"
+            done <<EOF
+$( printf '%s\n' "$annotatedTagsYaml" | getYamlKeyPrefixes )
+EOF
         fi
         if checkTruthy "$configValue_lightweighttags_store_enabled"; then
-            printf '%s\n' "$stateYaml" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' | while IFS=' ' read -r branchName commitId; do
+            while IFS=' ' read -r branchName commitId; do
                 parentCommitIds="${parentCommitIds}${commitId}${NL}"
-            done
+            done <<EOF
+$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' )
+EOF
         fi
         if checkTruthy "$configValue_head_store_enabled"; then
             commitId="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'head:' | extractYamlValue 'commitId:' )"
