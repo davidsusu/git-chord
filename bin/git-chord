@@ -813,14 +813,33 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 'Prints a stored state in YAML format.' \
                 'If you use no parameters, last commit on the default tracker branch will be retrieved.' \
                 'If you use the (`<name>`) parameter, this branch name, with the default prefix, will be retrieved.' \
-                'In these cases, if you use the (`-<n>`) parameter, where (`<n>`) is a whole number greater than 1,' \
-                'you will refer to the nth parent on the first-parent history.' \
+                'In these cases, if you use the (`-<n>`) parameter, where (`<n>`) is a non-negative whole number,' \
+                'you will refer to the nth ascendant in the first-parent history.' \
                 'If you use the '\''(`-`)'\'' argument,' \
                 'then the (`<revision>`) parameter will be interpreted as an arbitrary committish' \
                 'It will indicate an error if the specified revision is not a snapshot commit.' \
             ;
             ;;
-        # TODO: diff
+        diff)
+            printTitle 'git chord diff'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord diff [<name>] [-<n> [-<m>]]'
+            printCodeBlock 'git chord diff <name> [-<n>] <name2> [-m]'
+            printCodeBlock 'git chord diff - <revision> [<revision2>]'
+            printSubtitle 'Example:'
+            printCodeBlock 'git chord diff -5 -2'
+            printSubtitle 'Description:'
+            printParagraph \
+                'Compares the current state or a stored state to another stored state.' \
+                'If you specify a single base revision (using neither (`<name2>`), (`<m>`), nor (`<revision2>`)),' \
+                'you will compare the current state with this specified revision.' \
+                'the current state means the data that would be printed using the (`state`) subcommand.' \
+                'The selection of the base revision follows the same rules as for the (`show`) command.' \
+                'If you specify a second revision, it will be used for the comparison instead of the current state.' \
+                '(`<name2>`) will be interpreted in the same way as (`<name>`),' \
+                '(`<m>`) as (`<n>`),' \
+                'and (`<revision2>`) as (`<revision>`)' \
+            ;
         # TODO: push
         # TODO: pull
         *)
