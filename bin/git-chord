@@ -819,6 +819,7 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 'then the (`<revision>`) parameter will be interpreted as an arbitrary committish' \
                 'It will indicate an error if the specified revision is not a snapshot commit.' \
             ;
+            exit 0
             ;;
         diff)
             printTitle 'git chord diff'
@@ -840,6 +841,7 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 '(`<m>`) as (`<n>`),' \
                 'and (`<revision2>`) as (`<revision>`)' \
             ;
+            exit 0
             ;;
         # TODO: push
         # TODO: pull
@@ -943,6 +945,7 @@ case "$command" in
                 exit 1
             fi
         fi
+        exit 0
         ;;
 esac
 
