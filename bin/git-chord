@@ -840,6 +840,7 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 '(`<m>`) as (`<n>`),' \
                 'and (`<revision2>`) as (`<revision>`)' \
             ;
+            ;;
         # TODO: push
         # TODO: pull
         *)
