@@ -1135,8 +1135,9 @@ EOF
                 exit 1
             fi
         fi
-        if ! stateYaml="$( git show "${stateRevision}:${STATE_FILE}" 2>/dev/null )"; then
-            printf '%sERROR: %s %s%s\n' "$formatError" 'Failed to load' "$STATE_FILE" "$formatErrorEnd" >&2
+        revPath="${stateRevision}:${STATE_FILE}"
+        if ! stateYaml="$( git show "$revPath" 2>/dev/null )"; then
+            printf '%sERROR: %s %s%s\n' "$formatError" 'Failed to load' "$revPath" "$formatErrorEnd" >&2
             exit 1
         fi
         if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
