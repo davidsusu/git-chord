@@ -431,6 +431,10 @@ applyInlineFormatting() { # stdin
     sed -E "s/\(\*/${formatBold}/g; s/\*\)/${formatBoldEnd}/g; s/\(\`/${formatCode}/g; s/\`\)/${formatCodeEnd}/g"
 }
 
+removeInlineFormatting() { # stdin
+    sed -E "s/\(\*|\*\)|\(\`|\`\)//g"
+}
+
 escapeHtml() { # stdin
     sed -E 's/&/\&amp;/g; s/"/\&quot;/g; s/</\&lt;/g; s/>/\&gt;/g'
 }
@@ -451,10 +455,10 @@ escapeMarkdown() ( # stdin
 
 printGrandTitle() { # $1: title
     if checkTruthy "$configValue_markdown"; then
-        printf '# %s\n\n' "$1" | escapeMarkdown
+        printf '# %s\n\n' "$1" | applyInlineFormatting | escapeMarkdown
     else
         echo ''
-        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd"
+        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd" | removeInlineFormatting
         printf '%s\n\n' "$( repeatChar '=' "$( getLength "$1" )" )"
         printNlIf "$configValue_verbose"
     fi
@@ -462,19 +466,19 @@ printGrandTitle() { # $1: title
 
 printTitle() { # $1: title
     if checkTruthy "$configValue_markdown"; then
-        printf '# %s\n\n' "$1" | escapeMarkdown
+        printf '# %s\n\n' "$1" | applyInlineFormatting | escapeMarkdown
     else
         printNlIf "$configValue_verbose"
-        printf '%s%s%s\n\n' "$formatBold" "$1" "$formatBoldEnd"
+        printf '%s%s%s\n\n' "$formatBold" "$1" "$formatBoldEnd" | removeInlineFormatting
     fi
 }
 
 printSubtitle() { # $1: subtitle
     if checkTruthy "$configValue_markdown"; then
-        printf '## %s\n\n' "$1" | escapeMarkdown
+        printf '## %s\n\n' "$1" | applyInlineFormatting | escapeMarkdown
     else
         printNlIf "$configValue_verbose"
-        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd"
+        printf '%s%s%s\n' "$formatBold" "$1" "$formatBoldEnd" | removeInlineFormatting
         printNlIf "$configValue_verbose"
     fi
 }
@@ -1151,8 +1155,103 @@ EOF
         exit 0
         ;;
     diff)
-        printf '%sERROR: %s%s\n' "$formatError" 'The diff command is not implemented yet' "$formatErrorEnd" >&2
-        exit 1
+        nameArg="$( getNthLine "$nonOptArgs" 1 )"
+        revision2=''
+        if [ -z "$nameArg" ]; then
+            revision1="${configValue_trackers_prefix}${configValue_trackers_name}"
+        elif [ "$nameArg" = '-' ]; then
+            revision1="$( getNthLine "$nonOptArgs" 2 )"
+            if [ -z "$revision1" ]; then
+                printf '%sERROR: %s%s\n' "$formatError" 'No revision was specified' "$formatErrorEnd" >&2
+                exit 1
+            fi
+            revision2Arg="$( getNthLine "$nonOptArgs" 3 )"
+            if [ -n "$revision2Arg" ]; then
+                revision2="$revision2Arg"
+            fi
+        elif checkStartsWith "$nameArg" '-'; then
+            revision1="${configValue_trackers_prefix}${configValue_trackers_name}$( printf '%s\n' "$nameArg" | sed -E 's/^\-/~/' )"
+            n2Arg="$( getNthLine "$nonOptArgs" 2 )"
+            if checkStartsWith "$n2Arg" '-'; then
+                revision2="${configValue_trackers_prefix}${configValue_trackers_name}$( printf '%s\n' "$n2Arg" | sed -E 's/^\-/~/' )"
+            elif [ -n "$n2Arg" ]; then
+                printf '%sERROR: %s: %s%s\n' "$formatError" 'Invalid offset specifier' "$n2Arg" "$formatErrorEnd" >&2
+                exit 1
+            fi
+        else
+            revision1="${configValue_trackers_prefix}${nameArg}"
+            nextArg="$( getNthLine "$nonOptArgs" 2 )"
+            rev2Arg1=''
+            rev2Arg2=''
+            if [ -n "$nextArg" ]; then
+                if checkStartsWith "$nextArg" '-'; then
+                    revision1="${revision1}$( printf '%s\n' "$nextArg" | sed -E 's/^\-/~/' )"
+                    nextNextArg="$( getNthLine "$nonOptArgs" 3 )"
+                    if [ -n "$nextNextArg" ]; then
+                        if checkStartsWith "$nextNextArg" '-'; then
+                            rev2Arg1="$nameArg"
+                            rev2Arg2="$nextNextArg"
+                        else
+                            rev2Arg1="$nextNextArg"
+                            rev2Arg2="$( getNthLine "$nonOptArgs" 4 )"
+                        fi
+                    fi
+                else
+                    rev2Arg1="${nextArg}"
+                    rev2Arg2="$( getNthLine "$nonOptArgs" 3 )"
+                fi
+                if [ -n "$rev2Arg1" ]; then
+                    revision2="${configValue_trackers_prefix}${rev2Arg1}"
+                    if [ -n "$rev2Arg2" ]; then
+                        revision2="${revision2}$( printf '%s\n' "$rev2Arg2" | sed -E 's/^\-/~/' )"
+                    fi
+                fi
+            fi
+        fi
+        revPath1="${revision1}:${STATE_FILE}"
+        if ! stateYaml1="$( git show "$revPath1" 2>/dev/null )"; then
+            printf '%sERROR: %s %s%s\n' "$formatError" 'Failed to load' "$revPath1" "$formatErrorEnd" >&2
+            exit 1
+        fi
+        if [ -n "$revision2" ]; then
+            revPath2="${revision2}:${STATE_FILE}"
+            if ! stateYaml2="$( git show "$revPath2" 2>/dev/null )"; then
+                printf '%sERROR: %s %s%s\n' "$formatError" 'Failed to load' "$revPath2" "$formatErrorEnd" >&2
+                exit 1
+            fi
+        else
+            stateYaml2="$( printState )"
+        fi
+        if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
+            titleText="Diff between '(\`${revision1}\`)' and "
+            if [ -n "$revision2" ]; then
+                titleText="${titleText}'(\`${revision2}\`)'"
+            else
+                titleText="${titleText}the current state"
+            fi
+            printTitle "$titleText"
+            
+            
+            # TODO
+            
+            printParagraph 'TODO'
+            
+            
+            
+        else
+            tempYamlFile1="$( mktemp )"
+            printf '%s\n' "$stateYaml1" > "$tempYamlFile1"
+            tempYamlFile2="$( mktemp )"
+            printf '%s\n' "$stateYaml2" > "$tempYamlFile2"
+            if checkTruthy "$configValue_color"; then
+                diff -u -U3 --color "$tempYamlFile1" "$tempYamlFile2"
+            else
+                diff -u -U3 "$tempYamlFile1" "$tempYamlFile2"
+            fi
+            rm "$tempYamlFile1"
+            rm "$tempYamlFile2"
+        fi
+        exit 0
         ;;
     push)
         printf '%sERROR: %s%s\n' "$formatError" 'The push command is not implemented yet' "$formatErrorEnd" >&2
