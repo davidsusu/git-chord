@@ -137,6 +137,43 @@ deduplicateLinesStable() ( # stdin
     printf '%s' "$output"
 )
 
+mergeMapTables() { # $1: table1, $2: table2
+    {
+        printf '%s' "$1" | sed -E 's/([^ ]*) /\1 1 /'
+        printf '%s' "$2" | sed -E 's/([^ ]*) /\1 2 /'
+    } | sort | (
+        pendingKey=''
+        pendingValue=''
+        while IFS=' ' read -r key src value; do
+            if [ -n "$key" ]; then
+                if [ "$src" = '1' ]; then
+                    if [ -n "$pendingKey" ]; then
+                        printf "%s 1 %s\n" "$pendingKey" "$pendingValue"
+                    fi
+                    pendingKey="$key"
+                    pendingValue="$value"
+                else
+                    if [ -n "$pendingKey" ]; then
+                        if [ "$key" = "$pendingKey" ]; then
+                            printf "%s * %s %s\n" "$key" "$pendingValue" "$value"
+                        else
+                            printf "%s 1 %s\n" "$pendingKey" "$pendingValue"
+                            printf "%s 2 %s\n" "$key" "$value"
+                        fi
+                    else
+                        printf "%s 2 %s\n" "$key" "$value"
+                    fi
+                    pendingKey=''
+                    pendingValue=''
+                fi
+            fi
+        done;
+        if [ -n "$pendingKey" ]; then
+            printf "%s 1 %s\n" "$pendingKey" "$pendingValue"
+        fi
+    )
+}
+
 
 ## configuration functions ##
 
@@ -369,6 +406,10 @@ formatSuccess=''
 formatSuccessEnd=''
 formatInfo=''
 formatInfoEnd=''
+formatRemove=''
+formatRemoveEnd=''
+formatAdd=''
+formatAddEnd=''
 formatBold=''
 formatBoldEnd=''
 formatCode=''
@@ -383,6 +424,10 @@ if checkTruthy "$configValue_color"; then
         formatSuccessEnd=''
         formatInfo=''
         formatInfoEnd=''
+        formatRemove=''
+        formatRemoveEnd=''
+        formatAdd=''
+        formatAddEnd=''
         formatBold='**'
         formatBoldEnd='**'
         formatCode='`'
@@ -396,6 +441,10 @@ if checkTruthy "$configValue_color"; then
         formatSuccessEnd="$( printf '\e[0m' )"
         formatInfo="$( printf '\e[1;96m' )"
         formatInfoEnd="$( printf '\e[0m' )"
+        formatRemove="$( printf '\e[1;31m' )"
+        formatRemoveEnd="$( printf '\e[0m' )"
+        formatAdd="$( printf '\e[1;32m' )"
+        formatAddEnd="$( printf '\e[0m' )"
         formatBold="$( printf '\e[1m' )"
         formatBoldEnd="$( printf '\e[0m' )"
         formatCode="$( printf '\e[1m' )"
@@ -497,14 +546,25 @@ printParagraph() { # $@: content
 printList() { # $@: items
     while [ "$#" -gt '0' ]; do
         if checkTruthy "$configValue_markdown"; then
-            printf '- %s\n' "$1"
+            printf -- '- %s\n' "$( printf '%s\n' "$1" | sed -E 's/^/  /' )" | sed -E 's/^\-   /- /'
         else
-            printf '   %s*%s %s\n' "$formatBold" "$formatBoldEnd" "$1"
+            printf '   %s*%s %s\n' "$formatBold" "$formatBoldEnd" "$( printf '%s\n' "$1" | sed  -E 's/^/     /' )" | sed -E 's/^(   \S+ )     /\1/'
         fi
         shift
     done
     echo ''
 }
+
+printListStdin() ( # stdin
+    while IFS= read -r line; do
+        if checkTruthy "$configValue_markdown"; then
+            printf -- '- %s\n' "$line"
+        else
+            printf '   %s*%s %s\n' "$formatBold" "$formatBoldEnd" "$line"
+        fi
+    done
+    echo ''
+)
 
 printCodeBlock() { # $@: content
     if checkTruthy "$configValue_markdown"; then
@@ -708,6 +768,34 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
             printf '    treeId: %s\n' "$( getWorkingtreeTreeId | quoteYamlValue )"
         ) fi
     )"
+}
+
+printRefMessagesByMergedTable() { # $1: mergedTable, $2: entityName, $3: sectionName
+    if [ -z "$( printf '%s' "$1" )" ]; then
+        if checkTruthy "$configValue_all"; then
+            printf '%s\n' "${formatInfo}${3} section stayed empty${formatInfoEnd}"
+        fi
+        return
+    fi
+    while IFS=' ' read -r branchName src value; do if [ -n "$branchName" ]; then
+        printf '%s\n' "${formatRemove}${2} removed:${formatRemoveEnd} ${formatCode}${branchName}${formatCodeEnd}"
+    fi done <<EOF
+$( printf '%s' "$1" | grep -E '^[^ ]* 1' )
+EOF
+    while IFS=' ' read -r branchName src value; do if [ -n "$branchName" ]; then
+        printf '%s\n' "${formatAdd}${2} added:${formatAddEnd} ${formatCode}${branchName}${formatCodeEnd}, pointing to ${formatCode}${value}${formatCodeEnd}"
+    fi done <<EOF
+$( printf '%s' "$1" | grep -E '^[^ ]* 2' )
+EOF
+    while IFS=' ' read -r branchName src value1 value2; do if [ -n "$branchName" ]; then
+        if [ "$value1" != "$value2" ]; then
+            printf '%s\n' "${formatInfo}${2} moved:${formatInfoEnd} ${formatCode}${branchName}${formatCodeEnd}, from ${formatCode}${value1}${formatCodeEnd} to ${formatCode}${value2}${formatCodeEnd}"
+        elif checkTruthy "$configValue_all"; then
+            printf '%s\n' "${formatInfo}${2} stayed:${formatInfoEnd} ${formatCode}${branchName}${formatCodeEnd}, at ${formatCode}${value1}${formatCodeEnd}"
+        fi
+    fi done <<EOF
+$( printf '%s' "$1" | grep -E '^[^ ]* \*' )
+EOF
 }
 
 # TODO verbose/error messages?
@@ -1222,6 +1310,7 @@ EOF
         else
             stateYaml2="$( printState )"
         fi
+        
         if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
             titleText="Diff between '(\`${revision1}\`)' and "
             if [ -n "$revision2" ]; then
@@ -1231,12 +1320,69 @@ EOF
             fi
             printTitle "$titleText"
             
+            branchesMessageLines=''
+            if printf '%s\n' "$stateYaml1" | grep -qE 'branches:'; then
+                if printf '%s\n' "$stateYaml2" | grep -qE 'branches:'; then
+                    branchTable1="$( printf '%s\n' "$stateYaml1" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' ' )${NL}"
+                    branchTable2="$( printf '%s\n' "$stateYaml2" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' ' )${NL}"
+                    mergedBranchTable="$( mergeMapTables "$branchTable1" "$branchTable2" )${NL}"
+                    branchItemMessages="$( printRefMessagesByMergedTable "$mergedBranchTable" 'Branch' 'Branches' )"
+                    if [ -n "$branchItemMessages" ]; then
+                        branchesMessageLines="${branchesMessageLines}${branchItemMessages}${NL}"
+                    fi
+                else
+                    branchesMessageLines="${branchesMessageLines}${formatWarning}Branches section removed${formatWarningEnd}${NL}"
+                fi
+            else
+                if printf '%s\n' "$stateYaml2" | grep -qE 'branches:'; then
+                    branchesMessageLines="${branchesMessageLines}${formatWarning}Branches section added${formatWarningEnd}${NL}"
+                    while IFS=' ' read -r branchName commitId; do
+                        branchesMessageLines="${branchesMessageLines}${formatAdd}Branch added${formatAddEnd}: ${formatCode}${branchName}${formatCodeEnd}, pointing to: ${formatCode}${commitId}${formatCodeEnd}${NL}"
+                    done <<EOF
+$( printf '%s\n' "$stateYaml2" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' ' )
+EOF
+                fi
+            fi
+            if [ -n "$branchesMessageLines" ]; then
+                printSubtitle 'Branches'
+                printf '%s' "$branchesMessageLines" | printListStdin
+            fi
             
-            # TODO
+            # TODO: annotatedTags
             
-            printParagraph 'TODO'
+            lightWeightTagsMessageLines=''
+            if printf '%s\n' "$stateYaml1" | grep -qE 'lightWeightTags:'; then
+                if printf '%s\n' "$stateYaml2" | grep -qE 'lightWeightTags:'; then
+                    lightWeightTable1="$( printf '%s\n' "$stateYaml1" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' )${NL}"
+                    lightWeightTable2="$( printf '%s\n' "$stateYaml2" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' )${NL}"
+                    mergedLightWeightTable="$( mergeMapTables "$lightWeightTable1" "$lightWeightTable2" )${NL}"
+                    lightWeightTagItemMessages="$( printRefMessagesByMergedTable "$mergedLightWeightTable" 'Light-weight tag' 'Light-weight tags' )"
+                    if [ -n "$lightWeightTagItemMessages" ]; then
+                        lightWeightTagsMessageLines="${lightWeightTagsMessageLines}${lightWeightTagItemMessages}${NL}"
+                    fi
+                else
+                    lightWeightTagsMessageLines="${lightWeightTagsMessageLines}${formatWarning}Light-weight tags section removed${formatWarningEnd}${NL}"
+                fi
+            else
+                if printf '%s\n' "$stateYaml2" | grep -qE 'lightWeightTags:'; then
+                    lightWeightTagsMessageLines="${lightWeightTagsMessageLines}${formatWarning}Light-weight tags section added${formatWarningEnd}${NL}"
+                    while IFS=' ' read -r lightWeightTagName commitId; do
+                        lightWeightTagsMessageLines="${lightWeightTagsMessageLines}${formatAdd}Light-weight tag added${formatAddEnd}: ${formatCode}${lightWeightTagName}${formatCodeEnd}, pointing to: ${formatCode}${commitId}${formatCodeEnd}${NL}"
+                    done <<EOF
+$( printf '%s\n' "$stateYaml2" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' )
+EOF
+                fi
+            fi
+            if [ -n "$lightWeightTagsMessageLines" ]; then
+                printSubtitle 'Light-weight tags'
+                printf '%s' "$lightWeightTagsMessageLines" | printListStdin
+            fi
             
+            # TODO: head
             
+            # TODO: stagingArea
+            
+            # TODO: workingTree
             
         else
             tempYamlFile1="$( mktemp )"
