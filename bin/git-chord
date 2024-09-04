@@ -729,7 +729,7 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
                 while IFS= read -r branchName; do
                     printf '    %s: %s\n' "$( printf '%s\n' "$branchName" | quoteYamlValue )" "$( git rev-parse "$branchName" | quoteYamlValue )"
                 done |
-                catYamlLinesOrElse '{}'
+                catYamlLinesOrElse ' {}'
         fi
         if checkTruthy "$configValue_annotatedtags_store_enabled"; then
             printf 'annotatedTags:'
@@ -742,7 +742,7 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
                     printf '        commitId: %s\n' "$( git rev-parse "$tagId"'^{commit}' | quoteYamlValue )"
                     printf '        message: %s\n' "$( quoteYamlValuePossiblyMultiline "$( git tag --list "$annotatedTagName" -n99 --format='%(contents)' | head -n -1 )" 12 )"
                 done |
-                catYamlLinesOrElse '{}'
+                catYamlLinesOrElse ' {}'
         fi
         if checkTruthy "$configValue_lightweighttags_store_enabled"; then
             printf 'lightWeightTags:'
@@ -752,7 +752,7 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
                 while IFS=' ' read -r commitId lightweightTagName; do
                     printf '    %s: %s\n' "$( printf '%s\n' "$lightweightTagName" | quoteYamlValue )" "$commitId"
                 done |
-                catYamlLinesOrElse '{}'
+                catYamlLinesOrElse ' {}'
         fi
         if checkTruthy "$configValue_head_store_enabled"; then
             printf 'head:\n'
