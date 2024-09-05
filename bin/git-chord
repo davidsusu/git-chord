@@ -1008,7 +1008,24 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             ;
             exit 0
             ;;
-        # TODO: apply
+        apply)
+            printTitle 'git chord apply'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord apply [<name>] [-n]'
+            printCodeBlock 'git chord apply - <revision>'
+            printSubtitle 'Description:'
+            printParagraph \
+                'Applies the specified stored state.' \
+                'If you use no parameters, last state on the default tracker branch will be applied' \
+                'If you use the (`<name>`) parameter, this branch name, with the default prefix, will be used instead' \
+                'In these cases, if you use the (`-<n>`) parameter, where (`<n>`) is a non-negative whole number,' \
+                'you will refer to the nth ascendant in the first-parent history.' \
+                'If you use the '\''(`-`)'\'' argument,' \
+                'then the (`<revision>`) parameter will be interpreted as an arbitrary committish' \
+                'It will indicate an error if the specified revision is not a snapshot commit.' \
+            ;
+            exit 0
+            ;;
         state)
             printTitle 'git chord state'
             printSubtitle 'Usage:'
@@ -1021,7 +1038,6 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             ;
             exit 0
             ;;
-        # TODO: apply
         show)
             printTitle 'git chord show'
             printSubtitle 'Usage:'
@@ -1064,8 +1080,28 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             ;
             exit 0
             ;;
-        # TODO: push
-        # TODO: pull
+        push)
+            
+            # TODO: push
+            
+            printTitle 'git chord push'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord push'
+            printSubtitle 'Description:'
+            printParagraph '(* NOT DOCUMENTED YET! *)'
+            exit 0
+            ;;
+        pull)
+            
+            # TODO: pull
+            
+            printTitle 'git chord pull'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord pull'
+            printSubtitle 'Description:'
+            printParagraph '(* NOT DOCUMENTED YET! *)'
+            exit 0
+            ;;
         spec)
             printTitle 'git chord spec'
             printSubtitle 'Usage:'
@@ -1088,7 +1124,7 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             exit 0
             ;;
         *)
-            printf '%sERROR: %s: %s%s\n' "$formatError" 'No help for subcommand' "$subcommand" "$formatErrorEnd" >&2
+            printf '%sERROR: %s: %s%s\n' "$formatError" 'No help for command' "$command" "$formatErrorEnd" >&2
             exit 1
             ;;
     esac
