@@ -789,7 +789,7 @@ $( printf '%s' "$1" | grep -E '^[^ ]* 2' )
 EOF
     while IFS=' ' read -r branchName src value1 value2; do if [ -n "$branchName" ]; then
         if [ "$value1" != "$value2" ]; then
-            printf '%s\n' "${formatInfo}${2} moved:${formatInfoEnd} ${formatCode}${branchName}${formatCodeEnd}, from ${formatCode}${value1}${formatCodeEnd} to ${formatCode}${value2}${formatCodeEnd}"
+            printf '%s\n' "${formatInfo}${2} changed:${formatInfoEnd} ${formatCode}${branchName}${formatCodeEnd}, from ${formatCode}${value1}${formatCodeEnd} to ${formatCode}${value2}${formatCodeEnd}"
         elif checkTruthy "$configValue_all"; then
             printf '%s\n' "${formatInfo}${2} stayed:${formatInfoEnd} ${formatCode}${branchName}${formatCodeEnd}, at ${formatCode}${value1}${formatCodeEnd}"
         fi
@@ -797,6 +797,134 @@ EOF
 $( printf '%s' "$1" | grep -E '^[^ ]* \*' )
 EOF
 }
+
+extractSimpleRefKeyValues() { # $1: stateYaml
+    printf '%s' "$1" | grep -E '.' | reformatYamlKeyValueLines ' '
+}
+
+extractAnnotatedTagRefKeyValues() ( # $1: stateYaml
+    while IFS= read -r keyPrefix; do
+        if [ -n "$keyPrefix" ]; then
+            key="$( printf '%s\n' "$keyPrefix" | extractYamlKey )"
+            value="$( printf '%s' "$1" | extractYamlSubLines "$keyPrefix" | extractYamlValue 'tagId:' )"
+            printf '%s %s\n' "$key" "$value"
+        fi
+    done <<EOF
+$( printf '%s' "$1" | getYamlKeyPrefixes )
+EOF
+)
+
+printRefVerboseDiff() ( # $1: stateYaml1, $2: stateYaml2, $3: keyPrefix, $4: entityName, $5: sectionName, $6: reformatFunctionName
+    stateYaml1="$1"
+    stateYaml2="$2"
+    keyPrefix="$3"
+    entityName="$4"
+    sectionName="$5"
+    reformatFunctionName="$6"
+
+    messageLines=''
+    if printf '%s\n' "$stateYaml1" | grep -qE "$keyPrefix"; then
+        if printf '%s\n' "$stateYaml2" | grep -qE "$keyPrefix"; then
+            table1="$( "$reformatFunctionName" "$( printf '%s\n' "$stateYaml1" | extractYamlSubLines "$keyPrefix" )${NL}" )${NL}"
+            table2="$( "$reformatFunctionName" "$( printf '%s\n' "$stateYaml2" | extractYamlSubLines "$keyPrefix" )${NL}" )${NL}"
+            mergedTable="$( mergeMapTables "$table1" "$table2" )${NL}"
+            itemMessages="$( printRefMessagesByMergedTable "$mergedTable" "$entityName" "$sectionName" )"
+            if [ -n "$itemMessages" ]; then
+                messageLines="${messageLines}${itemMessages}${NL}"
+            fi
+        else
+            messageLines="${messageLines}${formatWarning}${sectionName} section removed${formatWarningEnd}${NL}"
+        fi
+    else
+        if printf '%s\n' "$stateYaml2" | grep -qE "$keyPrefix"; then
+            messageLines="${messageLines}${formatWarning}${sectionName} section added${formatWarningEnd}${NL}"
+            while IFS=' ' read -r refName commitId; do
+                messageLines="${messageLines}${formatAdd}${entityName} added${formatAddEnd}: ${formatCode}${refName}${formatCodeEnd}, pointing to ${formatCode}${commitId}${formatCodeEnd}${NL}"
+            done <<EOF
+    $( printf '%s\n' "$stateYaml2" | extractYamlSubLines "$keyPrefix" | reformatYamlKeyValueLines ' ' )
+EOF
+        fi
+    fi
+    if [ -n "$messageLines" ]; then
+        printSubtitle "$sectionName"
+        printf '%s' "$messageLines" | printListStdin
+    fi
+)
+
+getHeadStateString() { # $1: ref, $2: commitId
+    if [ -n "$1" ]; then
+        printf '%s' "$1"
+    else
+        printf 'detached head'
+    fi
+    printf ' (%s)' "$2"
+}
+
+extractHeadStateString() { # $1: stateYaml
+    getHeadStateString \
+        "$( printf '%s\n' "$1" | extractYamlSubLines "head:" | extractYamlValue 'ref:' )" \
+        "$( printf '%s\n' "$1" | extractYamlSubLines "head:" | extractYamlValue 'commitId:' )" \
+    ;
+}
+
+printHeadVerboseDiff() ( # $1: stateYaml1, $2: stateYaml2
+    stateYaml1="$1"
+    stateYaml2="$2"
+
+    if printf '%s\n' "$stateYaml1" | grep -qE "head:"; then
+        if printf '%s\n' "$stateYaml2" | grep -qE "head:"; then
+            headStateString1="$( extractHeadStateString "$stateYaml1" )"
+            headStateString2="$( extractHeadStateString "$stateYaml2" )"
+            if [ "$headStateString1" != "$headStateString2" ]; then
+                messageLines="${messageLines}${formatInfo}HEAD changed${formatInfoEnd}, from ${formatCode}${headStateString1}${formatCodeEnd} to ${formatCode}${headStateString2}${formatCodeEnd}${NL}"
+            elif checkTruthy "$configValue_all"; then
+                messageLines="${messageLines}${formatInfo}HEAD stayed${formatInfoEnd}, at ${formatCode}${headStateString1}${formatCodeEnd}${NL}"
+            fi
+        else
+            messageLines="${messageLines}${formatWarning}HEAD section removed${formatWarningEnd}${NL}"
+        fi
+    else
+        if printf '%s\n' "$stateYaml2" | grep -qE "head:"; then
+            headStateString2="$( extractHeadStateString "$stateYaml2" )"
+            messageLines="${messageLines}${formatWarning}HEAD section added${formatWarningEnd}, pointing to ${formatCode}${headStateString2}${formatCodeEnd}${NL}"
+        fi
+    fi
+    if [ -n "$messageLines" ]; then
+        printSubtitle "HEAD"
+        printf '%s' "$messageLines" | printListStdin
+    fi
+)
+
+printTreeVerboseDiff() ( # $1: stateYaml1, $2: stateYaml2, $3: keyPrefix, $4: sectionName
+    stateYaml1="$1"
+    stateYaml2="$2"
+    keyPrefix="$3"
+    sectionName="$4"
+    
+    messageLines=''
+    if printf '%s\n' "$stateYaml1" | grep -qE "$keyPrefix"; then
+        if printf '%s\n' "$stateYaml2" | grep -qE "$keyPrefix"; then
+            treeId1="$( printf '%s\n' "$stateYaml1" | extractYamlSubLines "$keyPrefix" | extractYamlValue 'treeId:' )"
+            treeId2="$( printf '%s\n' "$stateYaml2" | extractYamlSubLines "$keyPrefix" | extractYamlValue 'treeId:' )"
+            if [ "$treeId1" != "$treeId2" ]; then
+                messageLines="${messageLines}${formatInfo}${sectionName} changed${formatInfoEnd}, from tree ${formatCode}${treeId1}${formatCodeEnd} to tree ${formatCode}${treeId2}${formatCodeEnd}${NL}"
+            elif checkTruthy "$configValue_all"; then
+                messageLines="${messageLines}${formatInfo}${sectionName} stayed${formatInfoEnd}, at tree ${formatCode}${treeId1}${formatCodeEnd}${NL}"
+            fi
+        else
+            messageLines="${messageLines}${formatWarning}${sectionName} section removed${formatWarningEnd}${NL}"
+        fi
+    else
+        if printf '%s\n' "$stateYaml2" | grep -qE "$keyPrefix"; then
+            treeId2="$( printf '%s\n' "$stateYaml2" | extractYamlSubLines "$keyPrefix" | extractYamlValue 'treeId:' )"
+            messageLines="${messageLines}${formatWarning}${sectionName} section added${formatWarningEnd}, pointing to tree ${formatCode}${treeId2}${formatCodeEnd}${NL}"
+        fi
+    fi
+    if [ -n "$messageLines" ]; then
+        printSubtitle "$sectionName"
+        printf '%s' "$messageLines" | printListStdin
+    fi
+)
 
 # TODO verbose/error messages?
 
@@ -1310,7 +1438,6 @@ EOF
         else
             stateYaml2="$( printState )"
         fi
-        
         if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
             titleText="Diff between '(\`${revision1}\`)' and "
             if [ -n "$revision2" ]; then
@@ -1319,71 +1446,19 @@ EOF
                 titleText="${titleText}the current state"
             fi
             printTitle "$titleText"
-            
-            branchesMessageLines=''
-            if printf '%s\n' "$stateYaml1" | grep -qE 'branches:'; then
-                if printf '%s\n' "$stateYaml2" | grep -qE 'branches:'; then
-                    branchTable1="$( printf '%s\n' "$stateYaml1" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' ' )${NL}"
-                    branchTable2="$( printf '%s\n' "$stateYaml2" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' ' )${NL}"
-                    mergedBranchTable="$( mergeMapTables "$branchTable1" "$branchTable2" )${NL}"
-                    branchItemMessages="$( printRefMessagesByMergedTable "$mergedBranchTable" 'Branch' 'Branches' )"
-                    if [ -n "$branchItemMessages" ]; then
-                        branchesMessageLines="${branchesMessageLines}${branchItemMessages}${NL}"
-                    fi
-                else
-                    branchesMessageLines="${branchesMessageLines}${formatWarning}Branches section removed${formatWarningEnd}${NL}"
-                fi
+            output="$( {
+                printRefVerboseDiff "$stateYaml1" "$stateYaml2" 'branches:' 'Branch' 'Branches' 'extractSimpleRefKeyValues'
+                printRefVerboseDiff "$stateYaml1" "$stateYaml2" 'annotatedTags:' 'Annotated tag' 'Annotated tags' 'extractAnnotatedTagRefKeyValues'
+                printRefVerboseDiff "$stateYaml1" "$stateYaml2" 'lightWeightTags:' 'Light-weight tag' 'Light-weight tags' 'extractSimpleRefKeyValues'
+                printHeadVerboseDiff "$stateYaml1" "$stateYaml2"
+                printTreeVerboseDiff "$stateYaml1" "$stateYaml2" 'stagingArea:' 'Staging area'
+                printTreeVerboseDiff "$stateYaml1" "$stateYaml2" 'workingTree:' 'Working tree'
+            } )"
+            if [ -n "$output" ]; then
+                printf '%s\n\n' "$output"
             else
-                if printf '%s\n' "$stateYaml2" | grep -qE 'branches:'; then
-                    branchesMessageLines="${branchesMessageLines}${formatWarning}Branches section added${formatWarningEnd}${NL}"
-                    while IFS=' ' read -r branchName commitId; do
-                        branchesMessageLines="${branchesMessageLines}${formatAdd}Branch added${formatAddEnd}: ${formatCode}${branchName}${formatCodeEnd}, pointing to: ${formatCode}${commitId}${formatCodeEnd}${NL}"
-                    done <<EOF
-$( printf '%s\n' "$stateYaml2" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' ' )
-EOF
-                fi
+                printf '%s%s%s\n\n' "$formatInfo" 'No difference detected' "$formatInfoEnd"
             fi
-            if [ -n "$branchesMessageLines" ]; then
-                printSubtitle 'Branches'
-                printf '%s' "$branchesMessageLines" | printListStdin
-            fi
-            
-            # TODO: annotatedTags
-            
-            lightWeightTagsMessageLines=''
-            if printf '%s\n' "$stateYaml1" | grep -qE 'lightWeightTags:'; then
-                if printf '%s\n' "$stateYaml2" | grep -qE 'lightWeightTags:'; then
-                    lightWeightTable1="$( printf '%s\n' "$stateYaml1" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' )${NL}"
-                    lightWeightTable2="$( printf '%s\n' "$stateYaml2" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' )${NL}"
-                    mergedLightWeightTable="$( mergeMapTables "$lightWeightTable1" "$lightWeightTable2" )${NL}"
-                    lightWeightTagItemMessages="$( printRefMessagesByMergedTable "$mergedLightWeightTable" 'Light-weight tag' 'Light-weight tags' )"
-                    if [ -n "$lightWeightTagItemMessages" ]; then
-                        lightWeightTagsMessageLines="${lightWeightTagsMessageLines}${lightWeightTagItemMessages}${NL}"
-                    fi
-                else
-                    lightWeightTagsMessageLines="${lightWeightTagsMessageLines}${formatWarning}Light-weight tags section removed${formatWarningEnd}${NL}"
-                fi
-            else
-                if printf '%s\n' "$stateYaml2" | grep -qE 'lightWeightTags:'; then
-                    lightWeightTagsMessageLines="${lightWeightTagsMessageLines}${formatWarning}Light-weight tags section added${formatWarningEnd}${NL}"
-                    while IFS=' ' read -r lightWeightTagName commitId; do
-                        lightWeightTagsMessageLines="${lightWeightTagsMessageLines}${formatAdd}Light-weight tag added${formatAddEnd}: ${formatCode}${lightWeightTagName}${formatCodeEnd}, pointing to: ${formatCode}${commitId}${formatCodeEnd}${NL}"
-                    done <<EOF
-$( printf '%s\n' "$stateYaml2" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' )
-EOF
-                fi
-            fi
-            if [ -n "$lightWeightTagsMessageLines" ]; then
-                printSubtitle 'Light-weight tags'
-                printf '%s' "$lightWeightTagsMessageLines" | printListStdin
-            fi
-            
-            # TODO: head
-            
-            # TODO: stagingArea
-            
-            # TODO: workingTree
-            
         else
             tempYamlFile1="$( mktemp )"
             printf '%s\n' "$stateYaml1" > "$tempYamlFile1"
