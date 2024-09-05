@@ -4,6 +4,15 @@
 
 TODO
 
+## Installation
+
+Currently no packaged version is available.
+However, you can find two installer files in the `install` directory:
+
+- `install-global-usrlocalbin.sh`: general global installer, requires root permission
+- `install-user-bashrc-path.sh`: user-scope installer for bash environments,
+   also installs bash autocompletion for the `git chord` subcommands and options
+
 ## Usage:
 
 ```
