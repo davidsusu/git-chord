@@ -1136,7 +1136,7 @@ case "$command" in
         printSubtitle 'Usage:'
         printCodeBlock 'git chord <subcommand> [<arguments...>] [<options...>]'
         printSubtitle 'Example:'
-        printCodeBlock 'git chord snapshot --verbose'
+        printCodeBlock 'git chord state --verbose'
         printSubtitle 'Subcommands:'
         commandNames="$( printf '%s\n' "$COMMANDS" | cut -d ' ' -f 1 )"
         commandComments="$( printf '%s\n' "$COMMANDS" | sed -E 's/^.* # ([^#]*)$/\1/' )"

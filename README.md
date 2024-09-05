@@ -13,7 +13,7 @@ git chord <subcommand> [<arguments...>] [<options...>]
 ## Example:
 
 ```
-git chord snapshot --verbose
+git chord state --verbose
 ```
 
 ## Subcommands:
