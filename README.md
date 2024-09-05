@@ -362,7 +362,7 @@ git chord spec commands
 ### Description:
 
 Gets special information mainly for machine processing. The special information 
-will be identified the `<requestType>`.
+will be identified by the `<requestType>`.
 
 ### Request types:
 
