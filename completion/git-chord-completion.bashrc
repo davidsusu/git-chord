@@ -11,6 +11,7 @@ declare -A COMMANDS=(
     ["diff"]=""
     ["push"]=""
     ["pull"]=""
+    ["spec"]="commands options"
 )
 
 # TODO collect automatically

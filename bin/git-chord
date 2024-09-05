@@ -5,7 +5,7 @@ VERSION='0.1.0-SNAPSHOT'
 COMMANDS="$( printf '%s' '
 help # Prints help (also works: (`-h`))
 version # Prints version of the chord extension (also works: (`-v`))
-config # Prints the current chord configuration (use (`--defaults`) to see the defaults)
+config get set list # Prints the current chord configuration (use (`--defaults`) to see the defaults)
 snapshot # Creates a snapshot of the repository state
 apply # Applies a previously saved snapshot to the repository
 state # Shows the current state based on the configuration
@@ -13,6 +13,7 @@ show # Shows full data of a previously saved snapshot
 diff # Shows diff between a previously saved snapshot and the current state
 push # Pushes the default chord branch (or using (`--all`): all chord branches)
 pull # Pulls the default chord branch (or using (`--all`): all chord branches)
+spec commands options # Gets special information mainly for machine processing
 ' | tail -n +2 )"
 
 DEFAULT_COMMAND='snapshot'
@@ -1065,6 +1066,27 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             ;;
         # TODO: push
         # TODO: pull
+        spec)
+            printTitle 'git chord spec'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord spec <requestType>'
+            printSubtitle 'Example:'
+            printCodeBlock 'git chord spec commands'
+            printSubtitle 'Description:'
+            printParagraph \
+                'Gets special information mainly for machine processing.' \
+                'The special information will be identified the (`<requestType>`).' \
+            ;
+            printSubtitle 'Request types:'
+            printParagraph \
+                '(*commands*): Lists the available commands line-by-line,' \
+                'followed by the subcommands in the same line, space-separated, if any.' \
+            ;
+            printParagraph \
+                '(*options*): Lists the available options (starting with (`--`)) line-by-line.' \
+            ;
+            exit 0
+            ;;
         *)
             printf '%sERROR: %s: %s%s\n' "$formatError" 'No help for subcommand' "$subcommand" "$formatErrorEnd" >&2
             exit 1
@@ -1080,8 +1102,8 @@ case "$command" in
         printSubtitle 'Example:'
         printCodeBlock 'git chord snapshot --verbose'
         printSubtitle 'Subcommands:'
-        commandNames="$( printf '%s\n'  "$COMMANDS" | cut -d ' ' -f 1 )"
-        commandComments="$( printf '%s\n'  "$COMMANDS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
+        commandNames="$( printf '%s\n' "$COMMANDS" | cut -d ' ' -f 1 )"
+        commandComments="$( printf '%s\n' "$COMMANDS" | sed -E 's/^.* # ([^#]*)$/\1/' )"
         commandI=0
         printf '%s\n' "$commandNames" | while IFS= read -r commandName; do
             commandI=$(( commandI + 1 ))
@@ -1164,6 +1186,28 @@ case "$command" in
                 printf '%sERROR: %s%s\n' "$formatError" 'Default value can not be changed' "$formatErrorEnd" >&2
                 exit 1
             fi
+        fi
+        exit 0
+        ;;
+    spec)
+        if [ "$subcommand" = 'commands' ]; then
+            printf '%s\n' "$COMMANDS" | sed -E 's/ #.*$//'
+        elif [ "$subcommand" = 'options' ]; then
+            printf '%s\n' "$defaults" | while IFS=' ' read -r configKey defaultValue; do
+                dashedConfigKey="$( printf '%s\n' "$configKey" | sed -E 's/\./-/g' )"
+                if checkBoolValue "$defaultValue"; then
+                    printf -- '--%s\n' "$dashedConfigKey"
+                    printf -- '--no-%s\n' "$dashedConfigKey"
+                else
+                    printf -- '--%s=\n' "$dashedConfigKey"
+                fi
+            done
+        elif [ -z "$subcommand" ]; then
+            printf '%sERROR: %s%s\n' "$formatError" 'No request type was given' "$formatErrorEnd" >&2
+            exit 1
+        else
+            printf '%sERROR: %s: %s%s\n' "$formatError" 'Unknown request type' "$subcommand" "$formatErrorEnd" >&2
+            exit 1
         fi
         exit 0
         ;;
