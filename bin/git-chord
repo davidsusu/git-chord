@@ -37,7 +37,7 @@ annotatedtags.apply.allowremove true # Allows removing annotated tags
 annotatedtags.apply.allowadd true # Allows adding annotated tags
 lightweighttags.store.enabled false # Enables saving state of tracked lightweight tags
 lightweighttags.store.regex .* # Sets the regex pattern for saving tracked lightweight tags
-lightweighttags.apply.enabled true # Enables applying the saved state of tracked lightweight tags
+lightweighttags.apply.enabled false # Enables applying the saved state of tracked lightweight tags
 lightweighttags.apply.regex .* # Sets the regex pattern for applying tracked lightweight tags
 lightweighttags.apply.allowremove false # Allows removing lightweight tags
 lightweighttags.apply.allowadd false # Allows adding lightweight tags
@@ -72,11 +72,22 @@ checkStartsWith() { # $1: contextString, $2: prefixToCheck
     esac
 }
 
-appendLine() { # $1: array, $2:newLine
-    if [ -n "$1" ]; then
-        printf '%s\n%s' "$1" "$2"
+checkHasPrefix() { # stdin, $1: prefixToCheck
+    while IFS= read -r line; do
+        if checkStartsWith "$line" "$1"; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+appendLine() { # $1: array, $2:newLineOrLines
+    if [ -z "$1" ]; then
+        printf '%s\n' "$2"
+    elif [ "$( printf '%s' "$1" )" = "$1" ]; then
+        printf '%s\n%s\n' "$1" "$2"
     else
-        printf '%s' "$2"
+        printf '%s%s\n' "$1" "$2"
     fi
 }
 
@@ -138,7 +149,61 @@ deduplicateLinesStable() ( # stdin
     printf '%s' "$output"
 )
 
-mergeMapTables() { # $1: table1, $2: table2
+checkMapKey() ( # $1: map, $2: key
+    while IFS= read -r line; do
+        if checkStartsWith "$line" "${2} "; then
+            return 0
+        fi
+    done <<EOF
+$( printf '%s\n' "$1" )
+EOF
+    return 1
+)
+
+getMapValue() ( # $1: map, $2: key
+    printf '%s\n' "$1" | while IFS= read -r line; do
+        if checkStartsWith "$line" "${2} "; then
+            printf '%s\n' "$line" | cut -d ' ' -s -f 2-
+            break
+        fi
+    done
+)
+
+setMapValue() ( # $1: map, $2: key, $3: newValue
+    found=''
+    while IFS= read -r line; do
+        if checkStartsWith "$line" "${2} "; then
+            printf '%s %s\n' "$2" "$3"
+            found='1'
+        elif [ -n "$line" ]; then
+            printf '%s\n' "$line"
+        fi
+    done <<EOF
+$( printf '%s\n' "$1" )
+EOF
+    if [ -z "$found" ]; then
+        printf '%s %s\n' "$2" "$3"
+    fi
+)
+
+requireMapKey() ( # $1: map, $2: key, $3: newValue
+    found=''
+    while IFS= read -r line; do
+        if [ -n "$line" ]; then
+            printf '%s\n' "$line"
+            if checkStartsWith "$line" "${2} "; then
+                found='1'
+            fi
+        fi
+    done <<EOF
+$( printf '%s\n' "$1" )
+EOF
+    if [ -z "$found" ]; then
+        printf '%s %s\n' "$2" "$3"
+    fi
+)
+
+mergeMaps() { # $1: table1, $2: table2
     {
         printf '%s' "$1" | sed -E 's/([^ ]*) /\1 1 /'
         printf '%s' "$2" | sed -E 's/([^ ]*) /\1 2 /'
@@ -176,7 +241,7 @@ mergeMapTables() { # $1: table1, $2: table2
 }
 
 
-## configuration functions ##
+## argument functions ##
 
 getArgumentKey() { # $1: arg
     normalizeKey "$( printf '%s\n' "$1" | cut -d '=' -f 1 | sed -E 's/\-\-(no\-)?//i' )"
@@ -205,44 +270,6 @@ isArgumentNextExpected() { # $1: arg, $2: isBool
         esac
     fi
 }
-
-checkConfigKey() ( # $1: config, $2: key, $3: messagePrefix
-    while IFS= read -r line; do
-        if checkStartsWith "$line" "${2} "; then
-            return 0
-        fi
-    done <<EOF
-$( printf '%s\n' "$1" )
-EOF
-    printf '%s%s: %s\n' "$3" 'Unrecognized configuration key' "$2" >&2
-    return 1
-)
-
-getConfigValue() ( # $1: config, $2: key
-    printf '%s\n' "$1" | while IFS= read -r line; do
-        if checkStartsWith "$line" "${2} "; then
-            printf '%s\n' "$line" | cut -d ' ' -s -f 2-
-            break
-        fi
-    done
-)
-
-setConfigValue() ( # $1: config, $2: key, $3: newValue
-    found=''
-    while IFS= read -r line; do
-        if checkStartsWith "$line" "${2} "; then
-            printf '%s %s\n' "$2" "$3"
-            found='1'
-        else
-            printf '%s\n' "$line"
-        fi
-    done <<EOF
-$( printf '%s\n' "$1" )
-EOF
-    if [ -z "$found" ]; then
-        printf '%s %s\n' "$2" "$3"
-    fi
-)
 
 
 ## YAML functions ##
@@ -338,9 +365,11 @@ while IFS= read -r line; do
     if [ -z "$givenKey" ]; then
         continue
     fi
-    if checkConfigKey "$defaults" "$givenKey" 'WARNING: '; then
+    if checkMapKey "$defaults" "$givenKey"; then
         givenValue="$( printf '%s\n' "$line" | cut -d ' ' -s -f 2- )"
-        config="$( setConfigValue "$config" "$givenKey" "$givenValue" )"
+        config="$( setMapValue "$config" "$givenKey" "$givenValue" )"
+    else
+        printf 'WARNING: %s: %s\n' 'Unrecognized configuration key' "$givenKey" >&2
     fi
 done <<EOF
 $( git config --get-regexp 'chord\..*' )
@@ -354,7 +383,7 @@ while [ "$#" -gt 0 ]; do
     arg="$1"
     shift
     if [ -n "$previousKey" ]; then
-        config="$( setConfigValue "$config" "$previousKey" "$arg" )"
+        config="$( setMapValue "$config" "$previousKey" "$arg" )"
         previousKey=''
         continue
     fi
@@ -370,15 +399,18 @@ while [ "$#" -gt 0 ]; do
         continue
     fi
     argKey="$( getArgumentKey "$arg" )"
-    checkConfigKey "$defaults" "$argKey" || exit 1
-    argDefaultValue="$( getConfigValue "$defaults" "$argKey" )"
+    if ! checkMapKey "$defaults" "$argKey"; then
+        printf 'ERROR: %s: %s\n' 'Unrecognized configuration key' "$argKey" >&2
+        exit 1
+    fi
+    argDefaultValue="$( getMapValue "$defaults" "$argKey" )"
     argIsBool="$( isBoolValue "$argDefaultValue" )"
     argValue="$( getArgumentValue "$arg" "$argIsBool" )"
     argHasNext="$( isArgumentNextExpected "$arg" "$argIsBool" )"
     if [ -n "$argHasNext" ]; then
         previousKey="$argKey"
     else
-        config="$( setConfigValue "$config" "$argKey" "$argValue" )"
+        config="$( setMapValue "$config" "$argKey" "$argValue" )"
     fi
 done
 if [ -n "$previousKey" ]; then
@@ -718,26 +750,40 @@ getWorkingtreeTreeId() ( # subshell local: $gitDir, $tmpGitDir, $$treeId, $linki
     printf '%s\n' "$treeId"
 )
 
+printMatchingBranches() { # $1: $regex
+    git for-each-ref --format='%(refname:short) %(objectname)' refs/heads |
+        awk --assign search="$configValue_trackers_prefix" 'substr($0, 1, length(search)) != search { print }' |
+        grep -E "^${1} "
+}
+
+printMatchingAnnotatedTags() { # $1: $regex
+    git for-each-ref refs/tags |
+        grep -E '\w+ tag\s+refs/tags/'"$1"'$' |
+        sed -E 's/^([^ ]+) tag\trefs\/tags\/([^ ]+)$/\2 \1/'
+}
+
+printMatchingLightWeightTags() {  # $1: $regex
+    git for-each-ref refs/tags |
+        grep -E '\w+ commit\s+refs/tags/'"$1"'$' |
+        sed -E 's/^([^ ]+) commit\trefs\/tags\/([^ ]+)$/\2 \1/'
+}
+
 printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commitId, $lightweightTagName, $tmpDir
     # stdin is holded back until all possible stderr was printed
     printf '%s\n' "$(
         printf 'timestamp: %s\n' "$( date --utc +'%Y-%m-%dT%H:%M:%SZ' | quoteYamlValue )"
         if checkTruthy "$configValue_branches_store_enabled"; then
             printf 'branches:'
-            git for-each-ref --format='%(refname:short)' refs/heads |
-                awk --assign search="$configValue_trackers_prefix" 'substr($0, 1, length(search)) != search { print }' |
-                grep -E "^${configValue_branches_store_regex}$" |
-                while IFS= read -r branchName; do
-                    printf '    %s: %s\n' "$( printf '%s\n' "$branchName" | quoteYamlValue )" "$( git rev-parse "$branchName" | quoteYamlValue )"
+            printMatchingBranches "$configValue_branches_store_regex" |
+                while IFS= read -r branchName commitId; do
+                    printf '    %s: %s\n' "$( printf '%s\n' "$branchName" | quoteYamlValue )" "$( printf '%s\n' "$commitId" | quoteYamlValue )"
                 done |
                 catYamlLinesOrElse ' {}'
         fi
         if checkTruthy "$configValue_annotatedtags_store_enabled"; then
             printf 'annotatedTags:'
-            git for-each-ref refs/tags |
-                grep -E '\w+ tag\s+refs/tags/'"$configValue_annotatedtags_store_regex"'$' |
-                sed -E 's/ .*\// /' |
-                while IFS=' ' read -r tagId annotatedTagName; do
+            printMatchingAnnotatedTags "$configValue_annotatedtags_store_regex" |
+                while IFS=' ' read -r annotatedTagName tagId; do
                     printf '    %s:\n' "$( printf '%s\n' "$annotatedTagName" | quoteYamlValue )"
                     printf '        tagId: %s\n' "$( printf '%s\n' "$tagId" | quoteYamlValue )"
                     printf '        commitId: %s\n' "$( git rev-parse "$tagId"'^{commit}' | quoteYamlValue )"
@@ -747,10 +793,8 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
         fi
         if checkTruthy "$configValue_lightweighttags_store_enabled"; then
             printf 'lightWeightTags:'
-            git for-each-ref refs/tags |
-                grep -E '\w+ commit\s+refs/tags/'"$configValue_lightweighttags_store_regex"'$' |
-                sed -E 's/ .*\// /' |
-                while IFS=' ' read -r commitId lightweightTagName; do
+            printMatchingLightWeightTags "$configValue_lightweighttags_store_regex" |
+                while IFS=' ' read -r lightweightTagName commitId; do
                     printf '    %s: %s\n' "$( printf '%s\n' "$lightweightTagName" | quoteYamlValue )" "$commitId"
                 done |
                 catYamlLinesOrElse ' {}'
@@ -764,10 +808,10 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
             printf 'stagingArea:\n'
             printf '    treeId: %s\n' "$( git write-tree | quoteYamlValue )"
         fi
-        if checkTruthy "$configValue_workingtree_store_enabled"; then (
+        if checkTruthy "$configValue_workingtree_store_enabled"; then
             printf 'workingTree:\n'
             printf '    treeId: %s\n' "$( getWorkingtreeTreeId | quoteYamlValue )"
-        ) fi
+        fi
     )"
 }
 
@@ -800,7 +844,7 @@ EOF
 }
 
 extractSimpleRefKeyValues() { # $1: stateYaml
-    printf '%s' "$1" | grep -E '.' | reformatYamlKeyValueLines ' '
+    printf '%s\n' "$1" | grep -E '.' | reformatYamlKeyValueLines ' '
 }
 
 extractAnnotatedTagRefKeyValues() ( # $1: stateYaml
@@ -811,7 +855,7 @@ extractAnnotatedTagRefKeyValues() ( # $1: stateYaml
             printf '%s %s\n' "$key" "$value"
         fi
     done <<EOF
-$( printf '%s' "$1" | getYamlKeyPrefixes )
+$( printf '%s\n' "$1" | getYamlKeyPrefixes )
 EOF
 )
 
@@ -824,11 +868,11 @@ printRefVerboseDiff() ( # $1: stateYaml1, $2: stateYaml2, $3: keyPrefix, $4: ent
     reformatFunctionName="$6"
 
     messageLines=''
-    if printf '%s\n' "$stateYaml1" | grep -qE "$keyPrefix"; then
-        if printf '%s\n' "$stateYaml2" | grep -qE "$keyPrefix"; then
+    if printf '%s\n' "$stateYaml1" | checkHasPrefix "$keyPrefix"; then
+        if printf '%s\n' "$stateYaml2" | checkHasPrefix "$keyPrefix"; then
             table1="$( "$reformatFunctionName" "$( printf '%s\n' "$stateYaml1" | extractYamlSubLines "$keyPrefix" )${NL}" )${NL}"
             table2="$( "$reformatFunctionName" "$( printf '%s\n' "$stateYaml2" | extractYamlSubLines "$keyPrefix" )${NL}" )${NL}"
-            mergedTable="$( mergeMapTables "$table1" "$table2" )${NL}"
+            mergedTable="$( mergeMaps "$table1" "$table2" )${NL}"
             itemMessages="$( printRefMessagesByMergedTable "$mergedTable" "$entityName" "$sectionName" )"
             if [ -n "$itemMessages" ]; then
                 messageLines="${messageLines}${itemMessages}${NL}"
@@ -837,7 +881,7 @@ printRefVerboseDiff() ( # $1: stateYaml1, $2: stateYaml2, $3: keyPrefix, $4: ent
             messageLines="${messageLines}${formatWarning}${sectionName} section removed${formatWarningEnd}${NL}"
         fi
     else
-        if printf '%s\n' "$stateYaml2" | grep -qE "$keyPrefix"; then
+        if printf '%s\n' "$stateYaml2" | checkHasPrefix "$keyPrefix"; then
             messageLines="${messageLines}${formatWarning}${sectionName} section added${formatWarningEnd}${NL}"
             while IFS=' ' read -r refName commitId; do
                 messageLines="${messageLines}${formatAdd}${entityName} added${formatAddEnd}: ${formatCode}${refName}${formatCodeEnd}, pointing to ${formatCode}${commitId}${formatCodeEnd}${NL}"
@@ -872,8 +916,8 @@ printHeadVerboseDiff() ( # $1: stateYaml1, $2: stateYaml2
     stateYaml1="$1"
     stateYaml2="$2"
 
-    if printf '%s\n' "$stateYaml1" | grep -qE "head:"; then
-        if printf '%s\n' "$stateYaml2" | grep -qE "head:"; then
+    if printf '%s\n' "$stateYaml1" | checkHasPrefix "head:"; then
+        if printf '%s\n' "$stateYaml2" | checkHasPrefix "head:"; then
             headStateString1="$( extractHeadStateString "$stateYaml1" )"
             headStateString2="$( extractHeadStateString "$stateYaml2" )"
             if [ "$headStateString1" != "$headStateString2" ]; then
@@ -885,7 +929,7 @@ printHeadVerboseDiff() ( # $1: stateYaml1, $2: stateYaml2
             messageLines="${messageLines}${formatWarning}HEAD section removed${formatWarningEnd}${NL}"
         fi
     else
-        if printf '%s\n' "$stateYaml2" | grep -qE "head:"; then
+        if printf '%s\n' "$stateYaml2" | checkHasPrefix "head:"; then
             headStateString2="$( extractHeadStateString "$stateYaml2" )"
             messageLines="${messageLines}${formatWarning}HEAD section added${formatWarningEnd}, pointing to ${formatCode}${headStateString2}${formatCodeEnd}${NL}"
         fi
@@ -903,8 +947,8 @@ printTreeVerboseDiff() ( # $1: stateYaml1, $2: stateYaml2, $3: keyPrefix, $4: se
     sectionName="$4"
     
     messageLines=''
-    if printf '%s\n' "$stateYaml1" | grep -qE "$keyPrefix"; then
-        if printf '%s\n' "$stateYaml2" | grep -qE "$keyPrefix"; then
+    if printf '%s\n' "$stateYaml1" | checkHasPrefix "$keyPrefix"; then
+        if printf '%s\n' "$stateYaml2" | checkHasPrefix "$keyPrefix"; then
             treeId1="$( printf '%s\n' "$stateYaml1" | extractYamlSubLines "$keyPrefix" | extractYamlValue 'treeId:' )"
             treeId2="$( printf '%s\n' "$stateYaml2" | extractYamlSubLines "$keyPrefix" | extractYamlValue 'treeId:' )"
             if [ "$treeId1" != "$treeId2" ]; then
@@ -916,7 +960,7 @@ printTreeVerboseDiff() ( # $1: stateYaml1, $2: stateYaml2, $3: keyPrefix, $4: se
             messageLines="${messageLines}${formatWarning}${sectionName} section removed${formatWarningEnd}${NL}"
         fi
     else
-        if printf '%s\n' "$stateYaml2" | grep -qE "$keyPrefix"; then
+        if printf '%s\n' "$stateYaml2" | checkHasPrefix "$keyPrefix"; then
             treeId2="$( printf '%s\n' "$stateYaml2" | extractYamlSubLines "$keyPrefix" | extractYamlValue 'treeId:' )"
             messageLines="${messageLines}${formatWarning}${sectionName} section added${formatWarningEnd}, pointing to tree ${formatCode}${treeId2}${formatCodeEnd}${NL}"
         fi
@@ -927,7 +971,23 @@ printTreeVerboseDiff() ( # $1: stateYaml1, $2: stateYaml2, $3: keyPrefix, $4: se
     fi
 )
 
-# TODO verbose/error messages?
+printLogMessage() { # $1: message
+    if checkTruthy "$configValue_markdown"; then
+        printf -- '- %s\n' "$1"
+    else
+        printf '%s\n' "$1"
+    fi
+}
+
+logInfoMessage() { # $1: message
+    if checkTruthy "$configValue_verbose"; then
+        printLogMessage "${formatInfo}INFO: ${1}${formatInfoEnd}"
+    fi
+}
+
+logWarningMessage() { # $1: message
+    printLogMessage "${formatWarning}WARNING: ${1}${formatWarningEnd}"
+}
 
 if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
     case "$command" in
@@ -1207,7 +1267,7 @@ case "$command" in
                 exit 0
             elif [ "$subcommand" = 'get' ]; then
                 configKey="$( getNthLine "$nonOptArgs" 2 )"
-                configDefaultValue="$( getConfigValue "$defaults" "$configKey" )"
+                configDefaultValue="$( getMapValue "$defaults" "$configKey" )"
                 if checkTruthy "$configValue_markdown"; then
                     printParagraph "Key: (\`${configKey}\`)"
                     printParagraph "Default: (\`${configDefaultValue}\`)"
@@ -1222,8 +1282,8 @@ case "$command" in
                 printf '%sERROR: %s%s\n' "$formatError" 'Default value can not be changed' "$formatErrorEnd" >&2
                 exit 1
             fi
+            exit 0
         fi
-        exit 0
         ;;
     spec)
         if [ "$subcommand" = 'commands' ]; then
@@ -1268,7 +1328,7 @@ case "$command" in
                 printf '%s\n' "$filteredConfig" | while IFS= read -r line; do
                     configKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
                     configValue="$( printf '%s\n' "$line" | cut -d ' ' -f 2- )"
-                    configDefaultValue="$( getConfigValue "$defaults" "$configKey" )"
+                    configDefaultValue="$( getMapValue "$defaults" "$configKey" )"
                     printTableRow \
                         "${formatCode}${configKey}${formatCodeEnd}" 40 \
                         "${formatCode}${configDefaultValue}${formatCodeEnd}" 15 \
@@ -1280,8 +1340,8 @@ case "$command" in
             fi
         elif [ "$subcommand" = 'get' ]; then
             configKey="$( getNthLine "$nonOptArgs" 2 )"
-            configDefaultValue="$( getConfigValue "$defaults" "$configKey" )"
-            configValue="$( getConfigValue "$config" "$configKey" )"
+            configDefaultValue="$( getMapValue "$defaults" "$configKey" )"
+            configValue="$( getMapValue "$config" "$configKey" )"
             if checkTruthy "$configValue_markdown"; then
                 printParagraph "Key: (\`${configKey}\`)"
                 printParagraph "Default: (\`${configDefaultValue}\`)"
@@ -1297,7 +1357,7 @@ case "$command" in
             configKey="$( getNthLine "$nonOptArgs" 2 )"
             configNewValue="$( getNthLine "$nonOptArgs" 3 )"
             if checkTruthy "$configValue_verbose"; then
-                configOldValue="$( getConfigValue "$config" )"
+                configOldValue="$( getMapValue "$config" )"
                 printf 'Set %s%s%s from '\''%s%s%s'\'' to '\''%s%s%s'\''\n' \
                     "$formatBold" "$configKey" "$formatBoldEnd" \
                     "$formatBold" "$configOldValue" "$formatBoldEnd" \
@@ -1399,8 +1459,159 @@ EOF
         git update-ref refs/heads/"$targetBranch" "$stateCommitId"
         ;;
     apply)
-        printf '%sERROR: %s%s\n' "$formatError" 'The apply command is not implemented yet' "$formatErrorEnd" >&2
-        exit 1
+        nameArg="$( getNthLine "$nonOptArgs" 1 )"
+        if [ -z "$nameArg" ]; then
+            stateRevision="${configValue_trackers_prefix}${configValue_trackers_name}"
+        elif [ "$nameArg" = '-' ]; then
+            revisionArg="$( getNthLine "$nonOptArgs" 2 )"
+            if [ -n "$revisionArg" ]; then
+                stateRevision="$revisionArg"
+            else
+                printf '%sERROR: %s%s\n' "$formatError" 'No revision was specified' "$formatErrorEnd" >&2
+                exit 1
+            fi
+        elif checkStartsWith "$nameArg" '-'; then
+            stateRevision="${configValue_trackers_prefix}${configValue_trackers_name}$( printf '%s\n' "$nameArg" | sed -E 's/^\-/~/' )"
+        else
+            stateRevision="${configValue_trackers_prefix}${nameArg}"
+            offsetArg="$( getNthLine "$nonOptArgs" 2 )"
+            if checkStartsWith "$offsetArg" '-'; then
+                stateRevision="${stateRevision}$( printf '%s\n' "$offsetArg" | sed -E 's/^\-/~/' )"
+            elif [ -n "$offsetArg" ]; then
+                printf '%sERROR: %s: %s%s\n' "$formatError" 'Illegal offset argument' "$offsetArg" "$formatErrorEnd" >&2
+                exit 1
+            fi
+        fi
+        revPath="${stateRevision}:${STATE_FILE}"
+        if ! stateYaml="$( git show "$revPath" 2>/dev/null )"; then
+            printf '%sERROR: %s %s%s\n' "$formatError" 'Failed to load' "$revPath" "$formatErrorEnd" >&2
+            exit 1
+        fi
+        
+        fixedRefMap=""
+        mergedBranchesTable=''
+        mergedAnnotatedTagsTable=''
+        mergedLightWeightTagsTable=''
+        
+        if checkTruthy "$configValue_branches_apply_enabled"; then
+            if printf '%s\n' "$stateYaml" | checkHasPrefix 'branches:'; then
+                currentBranchesMap="$( printMatchingBranches "$configValue_branches_apply_regex" )"
+                storedBranchesMap="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' ' | grep -E "^${configValue_branches_apply_regex} " )"
+                mergedBranchesTable="$( mergeMaps "${currentBranchesMap}${NL}" "${storedBranchesMap}${NL}" )"
+            else
+                logWarningMessage 'Branches section not found in the loaded state'
+            fi
+            if checkTruthy "$configValue_branches_apply_allowremove"; then
+                printf '%s\n' "$mergedBranchesTable" | grep -E ' 1 ' | while IFS=' ' read -r branchName source commitId1 commitId2; do
+                    echo "DELETE BRANCH: $branchName" # TODO
+                done
+            else
+                fixedRefMap="$( appendLine "$fixedRefMap" "$currentBranchesMap" )"
+            fi
+        elif printf '%s\n' "$stateYaml" | checkHasPrefix 'branches:'; then
+            logWarningMessage 'Applying branches is disabled'
+        fi
+        if checkTruthy "$configValue_annotatedtags_apply_enabled"; then
+            if printf '%s\n' "$stateYaml" | checkHasPrefix 'annotatedTags:'; then
+                currentAnnotatedTagsMap="$( printMatchingAnnotatedTags "$configValue_annotatedtags_apply_regex" )"
+                storedAnnotatedTagsMap="$( extractAnnotatedTagRefKeyValues "$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'annotatedTags:' )" | grep -E "^${configValue_annotatedtags_apply_regex} " )"
+                mergedAnnotatedTagsTable="$( mergeMaps "${currentAnnotatedTagsMap}${NL}" "${storedAnnotatedTagsMap}${NL}" )"
+            else
+                logWarningMessage 'Annotated tags section not found in the loaded state'
+            fi
+            if checkTruthy "$configValue_annotatedtags_apply_allowremove"; then
+                printf '%s\n' "$mergedAnnotatedTagsTable" | grep -E ' 1 ' | while IFS=' ' read -r tagName source tagId1 tagId2; do
+                    echo "DELETE ANNOTATED TAG: $tagName" # TODO
+                done
+            else
+                fixedRefMap="$( appendLine "$fixedRefMap" "$currentAnnotatedTagsMap" )"
+            fi
+        elif printf '%s\n' "$stateYaml" | checkHasPrefix 'annotatedTags:'; then
+            logWarningMessage 'Applying annotated tags is disabled'
+        fi
+        if checkTruthy "$configValue_lightweighttags_apply_enabled"; then
+            if printf '%s\n' "$stateYaml" | checkHasPrefix 'lightWeightTags:'; then
+                currentLightWeightTagsMap="$( printMatchingLightWeightTags "$configValue_lightweighttags_apply_regex" )"
+                storedLightWeightTagsMap="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' | grep -E "^${configValue_lightweighttags_apply_regex} " )"
+                mergedLightWeightTagsTable="$( mergeMaps "${currentLightWeightTagsMap}${NL}" "${mergedLightWeightTagsTable}${NL}" )"
+            else
+                logWarningMessage 'Light-weight tags section not found in the loaded state'
+            fi
+            if checkTruthy "$configValue_lightweighttags_apply_allowremove"; then
+                printf '%s\n' "$mergedLightWeightTagsTable" | grep -E ' 1 ' | while IFS=' ' read -r tagName source commitId1 commitId2; do
+                    echo "DELETE LIGHTWEIGHT TAG: $tagName" # TODO
+                done
+            else
+                fixedRefMap="$( appendLine "$fixedRefMap" "$currentLightWeightTagsMap" )"
+            fi
+        elif printf '%s\n' "$stateYaml" | checkHasPrefix 'lightWeightTags:'; then
+            logWarningMessage 'Applying light-weight tags is disabled'
+        fi
+        fixedRefs="$( printf '%s\n' "$fixedRefMap" | cut -d ' ' -s -f 1 )${NL}"
+        
+        if checkTruthy "$configValue_branches_apply_enabled"; then
+            printf '%s\n' "$mergedBranchesTable" | grep -E ' [2*] ' | while IFS=' ' read -r branchName source commitId1 commitId2; do
+                if [ "$source" = '2' ]; then
+                    echo "ADD BRANCH: $branchName" # TODO
+                elif [ "$commitId1" = "$commitId2" ]; then
+                    echo "STAYING BRANCH: $branchName" # TODO
+                else
+                    echo "MOVE BRANCH: $branchName" # TODO
+                fi
+            done
+        fi
+        if checkTruthy "$configValue_annotatedtags_apply_enabled"; then
+            printf '%s\n' "$mergedAnnotatedTagsTable" | grep -E ' [2*] ' | while IFS=' ' read -r tagName source tagId1 tagId2; do
+                if [ "$source" = '2' ]; then
+                    echo "ADD ANNOTATED TAG: $tagName" # TODO
+                elif [ "$tagId1" = "$tagId2" ]; then
+                    echo "STAYING ANNOTATED TAG: $tagName" # TODO
+                else
+                    echo "MOVE ANNOTATED TAG: $tagName" # TODO
+                fi
+            done
+        fi
+        if checkTruthy "$configValue_lightweighttags_apply_enabled"; then
+            printf '%s\n' "$mergedLightWeightTagsTable" | grep -E ' [2*] ' | while IFS=' ' read -r tagName source commitId1 commitId2; do
+                if [ "$source" = '2' ]; then
+                    echo "ADD LIGHT-WEIGHT TAG: $tagName" # TODO
+                elif [ "$commitId1" = "$commitId2" ]; then
+                    echo "STAYING LIGHT-WEIGHT TAG: $tagName" # TODO
+                else
+                    echo "MOVE LIGHT-WEIGHT TAG: $tagName" # TODO
+                fi
+            done
+        fi
+        
+        if checkTruthy "$configValue_head_apply_enabled"; then
+            if printf '%s\n' "$stateYaml" | checkHasPrefix 'head:'; then
+                echo "APPLY HEAD" # TODO
+            else
+                logWarningMessage 'HEAD section not found in the loaded state'
+            fi
+        elif printf '%s\n' "$stateYaml" | checkHasPrefix 'head:'; then
+            logWarningMessage 'Applying HEAD is disabled'
+        fi
+        if checkTruthy "$configValue_stagingarea_apply_enabled"; then
+            if printf '%s\n' "$stateYaml" | checkHasPrefix 'stagingArea:'; then
+                echo "APPLY STAGING AREA" # TODO
+            else
+                logWarningMessage 'Staging area section not found in the loaded state'
+            fi
+        elif printf '%s\n' "$stateYaml" | checkHasPrefix 'stagingArea:'; then
+            logWarningMessage 'Applying staging area is disabled'
+        fi
+        if checkTruthy "$configValue_workingtree_apply_enabled"; then
+            if printf '%s\n' "$stateYaml" | checkHasPrefix 'workingTree:'; then
+                echo "APPLY WORKING TREE" # TODO
+            else
+                logWarningMessage 'Working tree section not found in the loaded state'
+            fi
+        elif printf '%s\n' "$stateYaml" | checkHasPrefix 'workingTree:'; then
+            logWarningMessage 'Applying working tree is disabled'
+        fi
+        
+        exit 0
         ;;
     state)
         if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
