@@ -244,14 +244,6 @@ normalizeSystemErrorMessage() { # stdin
 }
 
 catchSystemErrorMessage() ( # $@: command with arguments
-
-    # TODO
-    printf '%s' "$formatWarning" >&2
-    printf '%s' 'Execute: ' >&2
-    printf '%s ' "$@" >&2
-    printf '%s\n' "$formatWarningEnd" >&2
-    return 0
-    
     errorMessage="$( "$@" 2>&1 >/dev/null )"
     statusCode="$?"
     if [ "$statusCode" -eq 0 ]; then
@@ -1488,29 +1480,14 @@ EOF
             exit 1
         fi
         
-        # FIXME
-        stateYaml="timestamp: '2024-09-07T10:50:55Z'
-branches:
-    'mainx 6602a767c9cd3c5be263cce967fb39fc9e0f01af': ''
-annotatedTags: {}
-head:
-    pointingTo: 'mainx'
-    ref: 'mainx'
-    commitId: 'XXX6602a767c9cd3c5be263cce967fb39fc9e0f01af'
-stagingArea:
-    treeId: 'XXXX8b0591c3311e598d1eb91179ddce2bb25cf635b7'
-workingTree:
-    treeId: 'YYYY8b0591c3311e598d1eb91179ddce2bb25cf635b7'
-"
-
         fixedRefMap=""
         mergedBranchesTable=''
         mergedAnnotatedTagsTable=''
         mergedLightWeightTagsTable=''
         
+        currentBranchesMap="$( printMatchingBranches "$configValue_branches_apply_regex" )"
         if checkTruthy "$configValue_branches_apply_enabled"; then
             if printf '%s\n' "$stateYaml" | checkHasPrefix 'branches:'; then
-                currentBranchesMap="$( printMatchingBranches "$configValue_branches_apply_regex" )"
                 storedBranchesMap="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'branches:' | reformatYamlKeyValueLines ' ' | grep -E "^${configValue_branches_apply_regex} " )"
                 mergedBranchesTable="$( mergeMaps "${currentBranchesMap}${NL}" "${storedBranchesMap}${NL}" )"
             else
@@ -1525,15 +1502,16 @@ workingTree:
                         fi
                     fi
                 done
-            else
-                fixedRefMap="$( appendLine "$fixedRefMap" "$currentBranchesMap" )"
+                currentBranchesMap=''
             fi
         elif printf '%s\n' "$stateYaml" | checkHasPrefix 'branches:'; then
             logWarningMessage 'Applying branches is disabled'
         fi
+        fixedRefMap="$( appendLine "$fixedRefMap" "$currentBranchesMap" )"
+        
+        currentAnnotatedTagsMap="$( printMatchingAnnotatedTags "$configValue_annotatedtags_apply_regex" )"
         if checkTruthy "$configValue_annotatedtags_apply_enabled"; then
             if printf '%s\n' "$stateYaml" | checkHasPrefix 'annotatedTags:'; then
-                currentAnnotatedTagsMap="$( printMatchingAnnotatedTags "$configValue_annotatedtags_apply_regex" )"
                 storedAnnotatedTagsMap="$( extractAnnotatedTagRefKeyValues "$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'annotatedTags:' )" | grep -E "^${configValue_annotatedtags_apply_regex} " )"
                 mergedAnnotatedTagsTable="$( mergeMaps "${currentAnnotatedTagsMap}${NL}" "${storedAnnotatedTagsMap}${NL}" )"
             else
@@ -1548,15 +1526,16 @@ workingTree:
                         fi
                     fi
                 done
-            else
-                fixedRefMap="$( appendLine "$fixedRefMap" "$currentAnnotatedTagsMap" )"
+                currentBranchesMap=''
             fi
         elif printf '%s\n' "$stateYaml" | checkHasPrefix 'annotatedTags:'; then
             logWarningMessage 'Applying annotated tags is disabled'
         fi
+        fixedRefMap="$( appendLine "$fixedRefMap" "$currentAnnotatedTagsMap" )"
+        
+        currentLightWeightTagsMap="$( printMatchingLightWeightTags "$configValue_lightweighttags_apply_regex" )"
         if checkTruthy "$configValue_lightweighttags_apply_enabled"; then
             if printf '%s\n' "$stateYaml" | checkHasPrefix 'lightWeightTags:'; then
-                currentLightWeightTagsMap="$( printMatchingLightWeightTags "$configValue_lightweighttags_apply_regex" )"
                 storedLightWeightTagsMap="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' | grep -E "^${configValue_lightweighttags_apply_regex} " )"
                 mergedLightWeightTagsTable="$( mergeMaps "${currentLightWeightTagsMap}${NL}" "${storedLightWeightTagsMap}${NL}" )"
             else
@@ -1570,46 +1549,112 @@ workingTree:
                         fi
                     fi
                 done
-            else
-                fixedRefMap="$( appendLine "$fixedRefMap" "$currentLightWeightTagsMap" )"
+                currentBranchesMap=''
             fi
         elif printf '%s\n' "$stateYaml" | checkHasPrefix 'lightWeightTags:'; then
             logWarningMessage 'Applying light-weight tags is disabled'
         fi
+        fixedRefMap="$( appendLine "$fixedRefMap" "$currentLightWeightTagsMap" )"
+        
         fixedRefs="$( printf '%s\n' "$fixedRefMap" | cut -d ' ' -s -f 1 )${NL}"
         
-        # TODO: handle branches.apply.allowAdd
-        # FIXME: moving is not removal (branches.apply.allowRemove)
         if checkTruthy "$configValue_branches_apply_enabled"; then
             printf '%s\n' "$mergedBranchesTable" | grep -E ' [2*] ' | while IFS=' ' read -r branchName source commitId1 commitId2; do
+                currentCommitId="$commitId1"
+                targetCommitId="$commitId2"
                 if [ "$source" = '2' ]; then
-                    echo "ADD BRANCH: $branchName" # TODO
+                    currentCommitId=''
+                    targetCommitId="$commitId1"
+                fi
+                if [ "$source" = '2' ]; then
+                    if checkTruthy "$configValue_branches_apply_allowadd"; then
+                        if ! printf '%s\n' "$fixedRefs" | grep -qE "$branchName"; then
+                            logInfoMessage "Add branch ${branchName} pointing to ${targetCommitId}"
+                            if ! checkTruthy "$configValue_dryrun"; then
+                                if ! gitError="$( catchSystemErrorMessage git branch "$branchName" "$targetCommitId" )"; then
+                                    printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to add branch' "$branchName" "$gitError" "$formatErrorEnd" >&2
+                                fi
+                            fi
+                        else
+                            logWarningMessage "Failed to set branch to ${targetCommitId}, it's reserved by a non-removable object"
+                        fi
+                    fi
                 elif [ "$commitId1" = "$commitId2" ]; then
-                    echo "STAYING BRANCH: $branchName" # TODO
+                    logInfoMessage "Branch ${branchName} staying at ${currentCommitId}"
                 else
-                    echo "MOVE BRANCH: $branchName" # TODO
+                    logInfoMessage "Move branch ${branchName} from ${currentCommitId} to ${targetCommitId}"
+                    if ! checkTruthy "$configValue_dryrun"; then
+                        if ! gitError="$( catchSystemErrorMessage git branch -f "$branchName" "$targetCommitId" )"; then
+                            printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move branch' "$branchName" "$gitError" "$formatErrorEnd" >&2
+                        fi
+                    fi
                 fi
             done
         fi
         if checkTruthy "$configValue_annotatedtags_apply_enabled"; then
+            annotatedTagsYaml="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'annotatedTags:' )"
             printf '%s\n' "$mergedAnnotatedTagsTable" | grep -E ' [2*] ' | while IFS=' ' read -r tagName source tagId1 tagId2; do
+                currentTagId="$tagId1"
+                targetTagId="$tagId2"
                 if [ "$source" = '2' ]; then
-                    echo "ADD ANNOTATED TAG: $tagName" # TODO
+                    currentTagId=''
+                    targetTagId="$tagId1"
+                fi
+                tagYaml="$( printf '%s\n' "$annotatedTagsYaml" | extractYamlSubLines "$( printf '%s\n' "$tagName" | quoteYamlValue ):" )"
+                tagCommitId="$( printf '%s\n' "$tagYaml" | extractYamlValue 'commitId:' )"
+                tagMessage="$( printf '%s\n' "$tagYaml" | extractYamlValue 'message:' )" # FIXME: removes all the trailing newlines
+                if [ "$source" = '2' ]; then
+                    if ! printf '%s\n' "$fixedRefs" | grep -qE "$tagName"; then
+                        logInfoMessage "Add annotated tag ${tagName} pointing to tag object ${targetTagId} (commit id: ${tagCommitId})"
+                        if ! checkTruthy "$configValue_dryrun"; then
+                            if ! gitError="$( catchSystemErrorMessage git tag -a "$tagName" -m "$tagMessage" )"; then
+                                printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to add annotated tag' "$tagName" "$gitError" "$formatErrorEnd" >&2
+                            fi
+                        fi
+                    else
+                        logWarningMessage "Failed to set annotated tag to ${targetTagId}, it's reserved by a non-removable object"
+                    fi
                 elif [ "$tagId1" = "$tagId2" ]; then
-                    echo "STAYING ANNOTATED TAG: $tagName" # TODO
+                    logInfoMessage "Annotated tag ${tagName} staying at ${currentTagId}"
                 else
-                    echo "MOVE ANNOTATED TAG: $tagName" # TODO
+                    currentTagCommitId="$( git rev-parse "$tagName" )"
+                    logInfoMessage "Move annotated tag ${tagName} from tag object ${currentTagId} (commit id: ${currentTagCommitId}) to tab object ${targetTagId} (commit id: ${tagCommitId})"
+                    if ! checkTruthy "$configValue_dryrun"; then
+                        if ! gitError="$( catchSystemErrorMessage git tag -f -a "$tagName" -m "$tagMessage" )"; then
+                            printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move annotated tag' "$tagName" "$gitError" "$formatErrorEnd" >&2
+                        fi
+                    fi
                 fi
             done
         fi
         if checkTruthy "$configValue_lightweighttags_apply_enabled"; then
             printf '%s\n' "$mergedLightWeightTagsTable" | grep -E ' [2*] ' | while IFS=' ' read -r tagName source commitId1 commitId2; do
+                currentCommitId="$commitId1"
+                targetCommitId="$commitId2"
                 if [ "$source" = '2' ]; then
-                    echo "ADD LIGHT-WEIGHT TAG: $tagName" # TODO
+                    currentCommitId=''
+                    targetCommitId="$commitId1"
+                fi
+                if [ "$source" = '2' ]; then
+                    if ! printf '%s\n' "$fixedRefs" | grep -qE "$tagName"; then
+                        logInfoMessage "Add light-weight tag ${tagName} pointing to ${targetCommitId}"
+                        if ! checkTruthy "$configValue_dryrun"; then
+                            if ! gitError="$( catchSystemErrorMessage git tag "$tagName" "$targetCommitId" )"; then
+                                printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to add light-weight tag' "$tagName" "$gitError" "$formatErrorEnd" >&2
+                            fi
+                        fi
+                    else
+                        logWarningMessage "Failed to set annotated tag to ${targetCommitId}, it's reserved by a non-removable object"
+                    fi
                 elif [ "$commitId1" = "$commitId2" ]; then
-                    echo "STAYING LIGHT-WEIGHT TAG: $tagName" # TODO
+                    logInfoMessage "Light-weight tag ${tagName} staying at ${currentCommitId}"
                 else
-                    echo "MOVE LIGHT-WEIGHT TAG: $tagName" # TODO
+                    logInfoMessage "Move light-weight tag ${tagName} from ${currentCommitId} to ${targetCommitId}"
+                    if ! checkTruthy "$configValue_dryrun"; then
+                        if ! gitError="$( catchSystemErrorMessage git update-ref refs/tags/"$tagName" "$targetCommitId" )"; then
+                            printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move light-weight-tag' "$tagName" "$gitError" "$formatErrorEnd" >&2
+                        fi
+                    fi
                 fi
             done
         fi
