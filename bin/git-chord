@@ -35,13 +35,11 @@ annotatedtags.store.regex .* # Sets the regex pattern for saving tracked annotat
 annotatedtags.apply.enabled true # Enables applying the saved state of tracked annotated tags
 annotatedtags.apply.regex .* # Sets the regex pattern for applying tracked annotated tags
 annotatedtags.apply.allowremove true # Allows removing annotated tags
-annotatedtags.apply.allowadd true # Allows adding annotated tags
 lightweighttags.store.enabled false # Enables saving state of tracked lightweight tags
 lightweighttags.store.regex .* # Sets the regex pattern for saving tracked lightweight tags
 lightweighttags.apply.enabled false # Enables applying the saved state of tracked lightweight tags
 lightweighttags.apply.regex .* # Sets the regex pattern for applying tracked lightweight tags
 lightweighttags.apply.allowremove false # Allows removing lightweight tags
-lightweighttags.apply.allowadd false # Allows adding lightweight tags
 head.store.enabled true # Enables saving state of the HEAD
 head.apply.enabled true # Allows moving the HEAD
 stagingarea.store.enabled false # Enables saving state of the staging area
@@ -240,6 +238,29 @@ mergeMaps() { # $1: table1, $2: table2
         fi
     )
 }
+
+normalizeSystemErrorMessage() { # stdin
+    sed -E 's/^error:\s*//i; s/^\/[^:]+:\s+[0-9]+:\s+//'
+}
+
+catchSystemErrorMessage() ( # $@: command with arguments
+
+    # TODO
+    printf '%s' "$formatWarning" >&2
+    printf '%s' 'Execute: ' >&2
+    printf '%s ' "$@" >&2
+    printf '%s\n' "$formatWarningEnd" >&2
+    return 0
+    
+    errorMessage="$( "$@" 2>&1 >/dev/null )"
+    statusCode="$?"
+    if [ "$statusCode" -eq 0 ]; then
+        return 0
+    else
+        printf '%s\n' "$errorMessage" | normalizeSystemErrorMessage
+        return "$statusCode"
+    fi
+)
 
 
 ## argument functions ##
@@ -698,11 +719,29 @@ getHeadCommitId() {
     git rev-parse --revs-only HEAD 2>/dev/null
 }
 
-getWorkingtreeTreeId() {
+getHeadPointingTo() {
+    reference="$( getHeadReference )"
+    if [ -n "$reference" ]; then
+        printf '%s\n' "$reference"
+    else
+        getHeadCommitId
+    fi
+}
+
+getWorkingTreeTreeId() {
     stagingAreaTreeId="$( git write-tree )"
     git add --all
     git write-tree
     git read-tree "$stagingAreaTreeId"
+}
+
+applyWorkingTreeTreeId() { # $1: newTreeId
+    stagingAreaTreeId="$( git write-tree )"
+    headPointingTo="$( getHeadPointingTo )"
+    commitId="$( git commit-tree "$newTreeId" -m "Working tree state to apply" )"
+    { git stash push --include-untracked -q -m "Working tree state backup" && git stash apply -q ; } || return 1
+    { git reset --hard "$commitId" && git reset --soft "$headPointingTo" && git read-tree "$stagingAreaTreeId" ; } || return 1
+    return 0
 }
 
 printMatchingBranches() { # $1: $regex
@@ -756,6 +795,7 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
         fi
         if checkTruthy "$configValue_head_store_enabled"; then
             printf 'head:\n'
+            printf '    pointingTo: %s\n' "$( getHeadPointingTo | quoteYamlValue )"
             printf '    ref: %s\n' "$( getHeadReference | quoteYamlValue )"
             printf '    commitId: %s\n' "$( getHeadCommitId | quoteYamlValue )"
         fi
@@ -765,7 +805,7 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
         fi
         if checkTruthy "$configValue_workingtree_store_enabled"; then
             printf 'workingTree:\n'
-            printf '    treeId: %s\n' "$( getWorkingtreeTreeId | quoteYamlValue )"
+            printf '    treeId: %s\n' "$( getWorkingTreeTreeId | quoteYamlValue )"
         fi
     )"
 }
@@ -1039,6 +1079,10 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 'If you use the '\''(`-`)'\'' argument,' \
                 'then the (`<revision>`) parameter will be interpreted as an arbitrary committish' \
                 'It will indicate an error if the specified revision is not a snapshot commit.' \
+            ;
+            printParagraph \
+                'Be careful when using the working tree, as this will cause a hard reset.' \
+                'In this case, all local changes will be saved into the stash, then erased from the file system.' \
             ;
             exit 0
             ;;
@@ -1444,6 +1488,21 @@ EOF
             exit 1
         fi
         
+        # FIXME
+        stateYaml="timestamp: '2024-09-07T10:50:55Z'
+branches:
+    'mainx 6602a767c9cd3c5be263cce967fb39fc9e0f01af': ''
+annotatedTags: {}
+head:
+    pointingTo: 'mainx'
+    ref: 'mainx'
+    commitId: 'XXX6602a767c9cd3c5be263cce967fb39fc9e0f01af'
+stagingArea:
+    treeId: 'XXXX8b0591c3311e598d1eb91179ddce2bb25cf635b7'
+workingTree:
+    treeId: 'YYYY8b0591c3311e598d1eb91179ddce2bb25cf635b7'
+"
+
         fixedRefMap=""
         mergedBranchesTable=''
         mergedAnnotatedTagsTable=''
@@ -1459,7 +1518,12 @@ EOF
             fi
             if checkTruthy "$configValue_branches_apply_allowremove"; then
                 printf '%s\n' "$mergedBranchesTable" | grep -E ' 1 ' | while IFS=' ' read -r branchName source commitId1 commitId2; do
-                    echo "DELETE BRANCH: $branchName" # TODO
+                    logInfoMessage "Delete branch: ${branchName}"
+                    if ! checkTruthy "$configValue_dryrun"; then
+                        if ! gitError="$( catchSystemErrorMessage git branch -D "$branchName" )"; then
+                            printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to delete branch' "$branchName" "$gitError" "$formatErrorEnd" >&2
+                        fi
+                    fi
                 done
             else
                 fixedRefMap="$( appendLine "$fixedRefMap" "$currentBranchesMap" )"
@@ -1477,7 +1541,12 @@ EOF
             fi
             if checkTruthy "$configValue_annotatedtags_apply_allowremove"; then
                 printf '%s\n' "$mergedAnnotatedTagsTable" | grep -E ' 1 ' | while IFS=' ' read -r tagName source tagId1 tagId2; do
-                    echo "DELETE ANNOTATED TAG: $tagName" # TODO
+                    logInfoMessage "Delete annotated tag: ${tagName}"
+                    if ! checkTruthy "$configValue_dryrun"; then
+                        if ! gitError="$( catchSystemErrorMessage git tag -d "$tagName" )"; then
+                            printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to delete annotated tag' "$tagName" "$gitError" "$formatErrorEnd" >&2
+                        fi
+                    fi
                 done
             else
                 fixedRefMap="$( appendLine "$fixedRefMap" "$currentAnnotatedTagsMap" )"
@@ -1495,7 +1564,11 @@ EOF
             fi
             if checkTruthy "$configValue_lightweighttags_apply_allowremove"; then
                 printf '%s\n' "$mergedLightWeightTagsTable" | grep -E ' 1 ' | while IFS=' ' read -r tagName source commitId1 commitId2; do
-                    echo "DELETE LIGHTWEIGHT TAG: $tagName" # TODO
+                    if ! checkTruthy "$configValue_dryrun"; then
+                        if ! gitError="$( catchSystemErrorMessage git tag -d "$tagName" )"; then
+                            printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to delete light-weight tag' "$tagName" "$gitError" "$formatErrorEnd" >&2
+                        fi
+                    fi
                 done
             else
                 fixedRefMap="$( appendLine "$fixedRefMap" "$currentLightWeightTagsMap" )"
@@ -1505,6 +1578,8 @@ EOF
         fi
         fixedRefs="$( printf '%s\n' "$fixedRefMap" | cut -d ' ' -s -f 1 )${NL}"
         
+        # TODO: handle branches.apply.allowAdd
+        # FIXME: moving is not removal (branches.apply.allowRemove)
         if checkTruthy "$configValue_branches_apply_enabled"; then
             printf '%s\n' "$mergedBranchesTable" | grep -E ' [2*] ' | while IFS=' ' read -r branchName source commitId1 commitId2; do
                 if [ "$source" = '2' ]; then
@@ -1541,7 +1616,19 @@ EOF
         
         if checkTruthy "$configValue_head_apply_enabled"; then
             if printf '%s\n' "$stateYaml" | checkHasPrefix 'head:'; then
-                echo "APPLY HEAD" # TODO
+                headState="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'head:' )"
+                headTarget="$( printf '%s\n' "$headState" | extractYamlValue 'pointingTo:' )"
+                headCurrent="$( getHeadPointingTo )"
+                if [ "$headTarget" = "$headCurrent" ]; then
+                    logInfoMessage "HEAD staying at ${headCurrent}"
+                else
+                    logInfoMessage "Move HEAD from ${headCurrent} to ${headTarget}"
+                    if ! checkTruthy "$configValue_dryrun"; then
+                        if ! gitError="$( catchSystemErrorMessage git checkout "$headTarget" )"; then
+                            printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move HEAD to' "$headTarget" "$gitError" "$formatErrorEnd" >&2
+                        fi
+                    fi
+                fi
             else
                 logWarningMessage 'HEAD section not found in the loaded state'
             fi
@@ -1550,7 +1637,19 @@ EOF
         fi
         if checkTruthy "$configValue_stagingarea_apply_enabled"; then
             if printf '%s\n' "$stateYaml" | checkHasPrefix 'stagingArea:'; then
-                echo "APPLY STAGING AREA" # TODO
+                stagingAreaState="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'stagingArea:' )"
+                stagingAreaTarget="$( printf '%s\n' "$stagingAreaState" | extractYamlValue 'treeId:' )"
+                stagingAreaCurrent="$( git write-tree )"
+                if [ "$stagingAreaTarget" = "$stagingAreaCurrent" ]; then
+                    logInfoMessage "Staging area staying at tree ${headCurrent}"
+                else
+                    logInfoMessage "Move staging area from ${stagingAreaCurrent} to ${stagingAreaTarget}"
+                    if ! checkTruthy "$configValue_dryrun"; then
+                        if ! gitError="$( catchSystemErrorMessage git read-tree "$stagingAreaTarget" )"; then
+                            printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move staging area to tree' "$stagingAreaTarget" "$gitError" "$formatErrorEnd" >&2
+                        fi
+                    fi
+                fi
             else
                 logWarningMessage 'Staging area section not found in the loaded state'
             fi
@@ -1559,7 +1658,19 @@ EOF
         fi
         if checkTruthy "$configValue_workingtree_apply_enabled"; then
             if printf '%s\n' "$stateYaml" | checkHasPrefix 'workingTree:'; then
-                echo "APPLY WORKING TREE" # TODO
+                workingTreeState="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'workingTree:' )"
+                workingTreeTarget="$( printf '%s\n' "$workingTreeState" | extractYamlValue 'treeId:' )"
+                workingTreeCurrent="$( getWorkingTreeTreeId )"
+                if [ "$workingTreeTarget" = "$workingTreeCurrent" ]; then
+                    logInfoMessage "Working tree staying at tree ${headCurrent}"
+                else
+                    logInfoMessage "Move working tree from ${workingTreeCurrent} to ${workingTreeTarget}"
+                    if ! checkTruthy "$configValue_dryrun"; then
+                        if ! gitError="$( catchSystemErrorMessage applyWorkingTreeTreeId "$workingTreeTarget" )"; then
+                            printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move working tree to tree' "$workingTreeTarget" "$gitError" "$formatErrorEnd" >&2
+                        fi
+                    fi
+                fi
             else
                 logWarningMessage 'Working tree section not found in the loaded state'
             fi
