@@ -697,58 +697,12 @@ getHeadCommitId() {
     git rev-parse --revs-only HEAD 2>/dev/null
 }
 
-getWorkingtreeTreeId() ( # subshell local: $gitDir, $tmpGitDir, $$treeId, $linkingSupported
-    gitDir='.git'
-    tmpGitDir="${gitDir}/git-chord-tmp"
-    testFileName="git-chord-link-test"
-    treeId=''
-    linkingSupported=''
-    
-    if [ -e "${tmpGitDir}" ] || [ -e "${gitDir}/objects/${testFileName}" ]; then
-        printf '%sERROR: %s%s\n' "$formatError" 'Temporary git chord entries detected on the file system. Abort.' "$formatErrorEnd" >&2
-        exit 1
-    fi
-
-    GIT_DIR="$tmpGitDir" git init -q && rm -rf "${tmpGitDir}/objects" || {
-        printf '%sERROR: %s%s\n' "$formatError" 'Failed to prepare the temporary git directory. Abort.' "$formatErrorEnd" >&2
-        exit 1
-    }
-    
-    touch "${gitDir}/objects/${testFileName}"
-    #ln -s "$( realpath "${gitDir}/objects" )" "${tmpGitDir}/objects"
-    if [ -f "${tmpGitDir}/objects/${testFileName}" ]; then
-        linkingSupported='1'
-    else
-        if checkTruthy "$configValue_verbose"; then
-            printf '%sWARNING: %s%s\n' "$formatWarning" 'Failed to link to the git objects directory. Trying copy.' "$formatWarningEnd" >&2
-        fi
-        mv "${gitDir}/objects" "${tmpGitDir}/objects"
-        if ! [ -f "${tmpGitDir}/objects/${testFileName}" ]; then
-            printf '%sERROR: %s%s\n' "$formatError" 'Failed to link or move the git objects directory. Abort.' "$formatErrorEnd" >&2
-            exit 1
-        fi
-    fi
-    
-    GIT_DIR="$tmpGitDir" GIT_WORK_TREE=. git add --all
-    treeId="$( GIT_DIR="$tmpGitDir" git write-tree )"
-
-    if [ -z "$treeId" ]; then
-        printf '%sERROR: %s%s\n' "$formatError" 'Failed to calculate the tree id of the working tree. Abort.' "$formatErrorEnd" >&2
-        exit 1
-    fi
-    
-    if [ -z "$linkingSupported" ]; then
-        mv "${tmpGitDir}/objects" "${gitDir}/objects"
-        if ! [ -f "${gitDir}/objects/${testFileName}" ]; then
-            printf '%sERROR: %s%s\n' "$formatError" 'Failed to move the git objects directory back to the original location. Abort.' "$formatErrorEnd" >&2
-            exit 1
-        fi
-    fi
-    
-    rm "${gitDir}/objects/${testFileName}"
-    rm -rf "$tmpGitDir"
-    printf '%s\n' "$treeId"
-)
+getWorkingtreeTreeId() {
+    stagingAreaTreeId="$( git write-tree )"
+    git add --all
+    git write-tree
+    git read-tree "$stagingAreaTreeId"
+}
 
 printMatchingBranches() { # $1: $regex
     git for-each-ref --format='%(refname:short) %(objectname)' refs/heads |
