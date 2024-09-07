@@ -1582,10 +1582,20 @@ EOF
                 elif [ "$commitId1" = "$commitId2" ]; then
                     logInfoMessage "Branch ${branchName} staying at ${currentCommitId}"
                 else
-                    logInfoMessage "Move branch ${branchName} from ${currentCommitId} to ${targetCommitId}"
-                    if ! checkTruthy "$configValue_dryrun"; then
-                        if ! gitError="$( catchSystemErrorMessage git branch -f "$branchName" "$targetCommitId" )"; then
-                            printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move branch' "$branchName" "$gitError" "$formatErrorEnd" >&2
+                    currentHead="$( getHeadReference )"
+                    if [ "$branchName" = "$currentHead" ]; then
+                        logInfoMessage "Move current branch ${branchName} from ${currentCommitId} to ${targetCommitId}"
+                        if ! checkTruthy "$configValue_dryrun"; then
+                            if ! gitError="$( catchSystemErrorMessage git reset --soft "$targetCommitId" )"; then
+                                printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move current branch' "$branchName" "$gitError" "$formatErrorEnd" >&2
+                            fi
+                        fi
+                    else
+                        logInfoMessage "Move branch ${branchName} from ${currentCommitId} to ${targetCommitId}"
+                        if ! checkTruthy "$configValue_dryrun"; then
+                            if ! gitError="$( catchSystemErrorMessage git branch -f "$branchName" "$targetCommitId" )"; then
+                                printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move branch' "$branchName" "$gitError" "$formatErrorEnd" >&2
+                            fi
                         fi
                     fi
                 fi
