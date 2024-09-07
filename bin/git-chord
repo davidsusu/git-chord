@@ -44,10 +44,8 @@ head.store.enabled true # Enables saving state of the HEAD
 head.apply.enabled true # Allows moving the HEAD
 stagingarea.store.enabled false # Enables saving state of the staging area
 stagingarea.apply.enabled false # Enables applying the saved state of the staging area
-stagingarea.apply.allowoverwrite false # Allows overwriting even a dirty staging area
 workingtree.store.enabled false # Enables saving the state of the working tree
 workingtree.apply.enabled false # Enables applying the saved state of the working tree
-workingtree.apply.allowoverwrite false # Allows overwriting even a dirty working tree
 dryrun false # Enables dry-run mode, no modification will be applied
 verbose false # Enables verbose mode, more information will be printed
 color true # Enables color mode, ANSI escapes will be used in the output
@@ -55,6 +53,11 @@ markdown false # Enables markdown mode, output will be formatted as a markdown d
 defaults false # Enables default mode, the default configuration will be used and printed (forcefully)
 all false # Enables the operation for all related objects
 ' | tail -n +2 )"
+
+# TODO: add configs:
+# head.apply.sticktocommit # Sticks to the commit, moving to detached head if necessary
+# stagingarea.followhead true # Make the staging area following HEAD by default
+# workingtree.followstagingarea true # Make the working tree following the staging area by default
 
 STATE_FILE='state.yaml'
 
