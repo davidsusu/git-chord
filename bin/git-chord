@@ -1,4 +1,5 @@
 #!/bin/sh
+# shellcheck disable=SC2016,SC2086,SC2154
 
 VERSION='0.1.0-SNAPSHOT'
 
@@ -870,6 +871,7 @@ printHeadVerboseDiff() ( # $1: stateYaml1, $2: stateYaml2
     stateYaml1="$1"
     stateYaml2="$2"
 
+    messageLines=''
     if printf '%s\n' "$stateYaml1" | checkHasPrefix "head:"; then
         if printf '%s\n' "$stateYaml2" | checkHasPrefix "head:"; then
             headStateString1="$( extractHeadStateString "$stateYaml1" )"
@@ -1385,12 +1387,12 @@ EOF
         fi
         if checkTruthy "$configValue_stagingarea_store_enabled"; then
             treeId="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'stagingArea:' | extractYamlValue 'treeId:' )"
-            commitId="$( git commit-tree "$emptyTreeId" -m "Chord stating area state" )"
+            commitId="$( git commit-tree "$treeId" -m "Chord stating area state" )"
             parentCommitIds="${parentCommitIds}${commitId}${NL}"
         fi
         if checkTruthy "$configValue_workingtree_store_enabled"; then
             treeId="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'workingTree:' | extractYamlValue 'treeId:' )"
-            commitId="$( git commit-tree "$emptyTreeId" -m "Chord working tree state" )"
+            commitId="$( git commit-tree "$treeId" -m "Chord working tree state" )"
             parentCommitIds="${parentCommitIds}${commitId}${NL}"
         fi
         parentCommitIds="$( printf '%s\n' "$parentCommitIds" | deduplicateLinesStable )"
@@ -1487,7 +1489,7 @@ EOF
             if printf '%s\n' "$stateYaml" | checkHasPrefix 'lightWeightTags:'; then
                 currentLightWeightTagsMap="$( printMatchingLightWeightTags "$configValue_lightweighttags_apply_regex" )"
                 storedLightWeightTagsMap="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'lightWeightTags:' | reformatYamlKeyValueLines ' ' | grep -E "^${configValue_lightweighttags_apply_regex} " )"
-                mergedLightWeightTagsTable="$( mergeMaps "${currentLightWeightTagsMap}${NL}" "${mergedLightWeightTagsTable}${NL}" )"
+                mergedLightWeightTagsTable="$( mergeMaps "${currentLightWeightTagsMap}${NL}" "${storedLightWeightTagsMap}${NL}" )"
             else
                 logWarningMessage 'Light-weight tags section not found in the loaded state'
             fi
