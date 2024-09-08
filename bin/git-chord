@@ -42,8 +42,11 @@ lightweighttags.apply.regex .* # Sets the regex pattern for applying tracked lig
 lightweighttags.apply.allowremove false # Allows removing lightweight tags
 head.store.enabled true # Enables saving state of the HEAD
 head.apply.enabled true # Allows moving the HEAD
+head.apply.sticktocommit false # Sticks to the commit, moving to detached head if necessary
+stagingarea.followhead true # Make the staging area following HEAD by default
 stagingarea.store.enabled false # Enables saving state of the staging area
 stagingarea.apply.enabled false # Enables applying the saved state of the staging area
+workingtree.followstagingarea true # Make the working tree following the staging area by default
 workingtree.store.enabled false # Enables saving the state of the working tree
 workingtree.apply.enabled false # Enables applying the saved state of the working tree
 dryrun false # Enables dry-run mode, no modification will be applied
@@ -53,11 +56,6 @@ markdown false # Enables markdown mode, output will be formatted as a markdown d
 defaults false # Enables default mode, the default configuration will be used and printed (forcefully)
 all false # Enables the operation for all related objects
 ' | tail -n +2 )"
-
-# TODO: add configs:
-# head.apply.sticktocommit # Sticks to the commit, moving to detached head if necessary
-# stagingarea.followhead true # Make the staging area following HEAD by default
-# workingtree.followstagingarea true # Make the working tree following the staging area by default
 
 STATE_FILE='state.yaml'
 
@@ -732,10 +730,17 @@ getWorkingTreeTreeId() {
 
 applyWorkingTreeTreeId() { # $1: newTreeId
     stagingAreaTreeId="$( git write-tree )"
-    headPointingTo="$( getHeadPointingTo )"
-    commitId="$( git commit-tree "$newTreeId" -m "Working tree state to apply" )"
+    headReference="$( getHeadReference )"
+    headCommitId="$( getHeadCommitId )"
+    commitId="$( git commit-tree "$1" -m "Working tree state to apply" )"
     { git stash push --include-untracked -q -m "Working tree state backup" && git stash apply -q ; } || return 1
-    { git reset --hard "$commitId" && git reset --soft "$headPointingTo" && git read-tree "$stagingAreaTreeId" ; } || return 1
+    { git reset --hard && git checkout "$commitId" ; } || exit 1
+    if [ -n "$headReference" ]; then
+        git symbolic-ref HEAD refs/heads/"$headReference" || return 1
+    else
+        git update-ref HEAD "$headCommitId" || return 1
+    fi
+    git read-tree "$stagingAreaTreeId" || return 1
     return 0
 }
 
@@ -764,7 +769,7 @@ printState() { # subshell local: $branchName, $tagId, $annotatedTagName, $commit
         if checkTruthy "$configValue_branches_store_enabled"; then
             printf 'branches:'
             printMatchingBranches "$configValue_branches_store_regex" |
-                while IFS= read -r branchName commitId; do
+                while IFS=' ' read -r branchName commitId; do
                     printf '    %s: %s\n' "$( printf '%s\n' "$branchName" | quoteYamlValue )" "$( printf '%s\n' "$commitId" | quoteYamlValue )"
                 done |
                 catYamlLinesOrElse ' {}'
@@ -1454,6 +1459,9 @@ EOF
         git update-ref refs/heads/"$targetBranch" "$stateCommitId"
         ;;
     apply)
+        
+        # TODO: consider untracked files
+        
         nameArg="$( getNthLine "$nonOptArgs" 1 )"
         if [ -z "$nameArg" ]; then
             stateRevision="${configValue_trackers_prefix}${configValue_trackers_name}"
@@ -1676,7 +1684,13 @@ EOF
             if printf '%s\n' "$stateYaml" | checkHasPrefix 'head:'; then
                 headState="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'head:' )"
                 headTarget="$( printf '%s\n' "$headState" | extractYamlValue 'pointingTo:' )"
+                headTargetCommitId="$( printf '%s\n' "$headState" | extractYamlValue 'commitId:' )"
                 headCurrent="$( getHeadPointingTo )"
+                headCurrentCommitId="$( getHeadCommitId )"
+                if checkTruthy "$configValue_head_apply_sticktocommit" && [ "$headTargetCommitId" != "$headCurrentCommitId" ]; then
+                    logWarningMessage "HEAD will be forced to commit ${headTargetCommitId}"
+                    headTarget="$headTargetCommitId"
+                fi
                 if [ "$headTarget" = "$headCurrent" ]; then
                     logInfoMessage "HEAD staying at ${headCurrent}"
                 else
@@ -1693,6 +1707,8 @@ EOF
         elif printf '%s\n' "$stateYaml" | checkHasPrefix 'head:'; then
             logWarningMessage 'Applying HEAD is disabled'
         fi
+        
+        stagingAreaWasSet=''
         if checkTruthy "$configValue_stagingarea_apply_enabled"; then
             if printf '%s\n' "$stateYaml" | checkHasPrefix 'stagingArea:'; then
                 stagingAreaState="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'stagingArea:' )"
@@ -1703,7 +1719,9 @@ EOF
                 else
                     logInfoMessage "Move staging area from ${stagingAreaCurrent} to ${stagingAreaTarget}"
                     if ! checkTruthy "$configValue_dryrun"; then
-                        if ! gitError="$( catchSystemErrorMessage git read-tree "$stagingAreaTarget" )"; then
+                        if gitError="$( catchSystemErrorMessage git read-tree "$stagingAreaTarget" )"; then
+                            stagingAreaWasSet='1'
+                        else
                             printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move staging area to tree' "$stagingAreaTarget" "$gitError" "$formatErrorEnd" >&2
                         fi
                     fi
@@ -1714,6 +1732,19 @@ EOF
         elif printf '%s\n' "$stateYaml" | checkHasPrefix 'stagingArea:'; then
             logWarningMessage 'Applying staging area is disabled'
         fi
+        if checkTruthy "$configValue_stagingarea_followhead" && [ -z "$stagingAreaWasSet" ]; then
+            headTreeId="$( git rev-parse --verify -q 'HEAD^{tree}' )"
+            if [ -n "$headTreeId" ]; then
+                logInfoMessage "Staging area will follow HEAD to tree ${headTreeId}"
+                if ! gitError="$( catchSystemErrorMessage git read-tree "$headTreeId" )"; then
+                    printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move staging area to HEAD tree' "$headTreeId" "$gitError" "$formatErrorEnd" >&2
+                fi
+            else
+                logWarningMessage 'Staging area failed to follow HEAD because HEAD has no tree'
+            fi
+        fi
+        
+        workingTreeWasSet=''
         if checkTruthy "$configValue_workingtree_apply_enabled"; then
             if printf '%s\n' "$stateYaml" | checkHasPrefix 'workingTree:'; then
                 workingTreeState="$( printf '%s\n' "$stateYaml" | extractYamlSubLines 'workingTree:' )"
@@ -1724,7 +1755,9 @@ EOF
                 else
                     logInfoMessage "Move working tree from ${workingTreeCurrent} to ${workingTreeTarget}"
                     if ! checkTruthy "$configValue_dryrun"; then
-                        if ! gitError="$( catchSystemErrorMessage applyWorkingTreeTreeId "$workingTreeTarget" )"; then
+                        if gitError="$( catchSystemErrorMessage applyWorkingTreeTreeId "$workingTreeTarget" )"; then
+                            workingTreeWasSet='1'
+                        else
                             printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move working tree to tree' "$workingTreeTarget" "$gitError" "$formatErrorEnd" >&2
                         fi
                     fi
@@ -1734,6 +1767,13 @@ EOF
             fi
         elif printf '%s\n' "$stateYaml" | checkHasPrefix 'workingTree:'; then
             logWarningMessage 'Applying working tree is disabled'
+        fi
+        if checkTruthy "$configValue_workingtree_followstagingarea" && [ -z "$workingTreeWasSet" ]; then
+            stagingAreaTreeId="$( git write-tree )"
+            logInfoMessage "Working tree will follow staging area to tree ${stagingAreaTreeId}"
+            if ! gitError="$( catchSystemErrorMessage applyWorkingTreeTreeId "$stagingAreaTreeId" )"; then
+                printf '%sERROR: %s: %s (%s)%s\n' "$formatError" 'Failed to move working tree to staging area tree' "$stagingAreaTreeId" "$gitError" "$formatErrorEnd" >&2
+            fi
         fi
         
         exit 0
