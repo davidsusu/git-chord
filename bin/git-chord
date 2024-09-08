@@ -1776,6 +1776,8 @@ EOF
             fi
         fi
         
+        printf '%sSUCCESS: %s %s%s\n' "$formatSuccess" 'Stored state was successfully reapplied from' "$stateRevision" "$formatSuccessEnd"
+        
         exit 0
         ;;
     state)
