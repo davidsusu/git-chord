@@ -372,7 +372,7 @@ git chord push
 
 ### Description:
 
-**NOT DOCUMENTED YET!**
+*NOT DOCUMENTED YET!*
 
 ## git chord pull
 
@@ -390,7 +390,7 @@ git chord pull
 
 ### Description:
 
-**NOT DOCUMENTED YET!**
+*NOT DOCUMENTED YET!*
 
 ## git chord spec
 

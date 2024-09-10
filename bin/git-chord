@@ -460,6 +460,8 @@ formatAdd=''
 formatAddEnd=''
 formatBold=''
 formatBoldEnd=''
+formatItalic=''
+formatItalicEnd=''
 formatCode=''
 formatCodeEnd=''
 if checkTruthy "$configValue_color"; then
@@ -478,6 +480,8 @@ if checkTruthy "$configValue_color"; then
         formatAddEnd=''
         formatBold='**'
         formatBoldEnd='**'
+        formatItalic='*'
+        formatItalicEnd='*'
         formatCode='`'
         formatCodeEnd='`'
     else
@@ -495,6 +499,8 @@ if checkTruthy "$configValue_color"; then
         formatAddEnd="$( printf '\e[0m' )"
         formatBold="$( printf '\e[1m' )"
         formatBoldEnd="$( printf '\e[0m' )"
+        formatItalic="$( printf '\e[1;33m' )"
+        formatItalicEnd="$( printf '\e[0m' )"
         formatCode="$( printf '\e[1m' )"
         formatCodeEnd="$( printf '\e[0m' )"
     fi
@@ -525,11 +531,11 @@ padLeft() { # $1: string, $2: length
 }
 
 applyInlineFormatting() { # stdin
-    sed -E "s/\(\*/${formatBold}/g; s/\*\)/${formatBoldEnd}/g; s/\(\`/${formatCode}/g; s/\`\)/${formatCodeEnd}/g"
+    sed -E "s/\(\*\*/${formatBold}/g; s/\*\*\)/${formatBoldEnd}/g; s/\(\*/${formatItalic}/g; s/\*\)/${formatItalicEnd}/g; s/\(\`/${formatCode}/g; s/\`\)/${formatCodeEnd}/g"
 }
 
 removeInlineFormatting() { # stdin
-    sed -E "s/\(\*|\*\)|\(\`|\`\)//g"
+    sed -E "s/\(\*\*?|\*\*?\)|\(\`|\`\)//g"
 }
 
 escapeHtml() { # stdin
@@ -1022,19 +1028,19 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             ;
             printSubtitle 'Sub-subcommands:'
             printParagraph \
-                '(*list*): This is the default command.' \
+                '(**list**): This is the default command.' \
                 'Lists all the available configuration keys and their values.' \
                 'Using the (`--default`) option you can see the defaults only,' \
                 'this option works out of git repositories too.' \
                 'Using the (`--all`) option you can list the ad hoc command line options too.' \
             ;
             printParagraph \
-                '(*get*): Gets the value of a given configuration key.' \
+                '(**get**): Gets the value of a given configuration key.' \
                 'Using the (`--default`) option you can see the default value,' \
                 'this option works out of git repositories too.' \
             ;
             printParagraph \
-                '(*set*): Changes the value of a given configuration key.' \
+                '(**set**): Changes the value of a given configuration key.' \
                 'You need to specify the key first, then the value.' \
                 'This sub-subcommand works only inside a git repository,' \
                 'and will save the value as a repository scoped git config' \
@@ -1187,11 +1193,11 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             ;
             printSubtitle 'Request types:'
             printParagraph \
-                '(*commands*): Lists the available commands line-by-line,' \
+                '(**commands**): Lists the available commands line-by-line,' \
                 'followed by the subcommands in the same line, space-separated, if any.' \
             ;
             printParagraph \
-                '(*options*): Lists the available options (starting with (`--`)) line-by-line.' \
+                '(**options**): Lists the available options (starting with (`--`)) line-by-line.' \
             ;
             exit 0
             ;;
@@ -1236,9 +1242,9 @@ case "$command" in
             printOptionShortDescription "$optionName" "$defaultValue" "$configComment"
         done
         printSubtitle 'Exit statuses:'
-        printParagraph '(*0*) - in case of success'
-        printParagraph '(*1*) - in case of error'
-        printParagraph '(*2*) - if the action was aborted due to dryrun mode'
+        printParagraph '(**0**) - in case of success'
+        printParagraph '(**1**) - in case of error'
+        printParagraph '(**2**) - if the action was aborted due to dryrun mode'
         exit 0
         ;;
     version|-v)
