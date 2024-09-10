@@ -990,7 +990,9 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
         help|-h)
             printTitle 'git chord help'
             printSubtitle 'Usage:'
-            printCodeBlock 'git chord {-h|help} [<options...>]'
+            printCodeBlock 'git chord (-h | help)'
+            printSubtitle 'Example:'
+            printCodeBlock 'git chord help'
             printSubtitle 'Description:'
             printParagraph 'Prints information about the available subcommands and options.'
             exit 0
@@ -998,7 +1000,9 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
         version|-v)
             printTitle 'git chord version'
             printSubtitle 'Usage:'
-            printCodeBlock 'git chord {-v|version} [<options...>]'
+            printCodeBlock 'git chord (-v | version)'
+            printSubtitle 'Example:'
+            printCodeBlock 'git chord version'
             printSubtitle 'Description:'
             printParagraph 'Prints version of the git chord extension.'
             exit 0
@@ -1006,9 +1010,9 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
         config)
             printTitle 'git chord config'
             printSubtitle 'Usage:'
-            printCodeBlock 'git chord config [list] [<options...>]'
-            printCodeBlock 'git chord config get <key> [<options...>]'
-            printCodeBlock 'git chord config set <key> <value> [<options...>]'
+            printCodeBlock 'git chord config [list]'
+            printCodeBlock 'git chord config get <key>'
+            printCodeBlock 'git chord config set <key> <value>'
             printSubtitle 'Example:'
             printCodeBlock 'git chord config set annotatedtags.store.enabled false'
             printSubtitle 'Description:'
@@ -1069,6 +1073,8 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             printSubtitle 'Usage:'
             printCodeBlock 'git chord apply [<name>] [-n]'
             printCodeBlock 'git chord apply - <revision>'
+            printSubtitle 'Example:'
+            printCodeBlock 'git chord apply -3'
             printSubtitle 'Description:'
             printParagraph \
                 'Applies the specified stored state.' \
@@ -1089,6 +1095,8 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
         state)
             printTitle 'git chord state'
             printSubtitle 'Usage:'
+            printCodeBlock 'git chord state'
+            printSubtitle 'Exaple:'
             printCodeBlock 'git chord state'
             printSubtitle 'Description:'
             printParagraph \
@@ -1147,8 +1155,10 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             printTitle 'git chord push'
             printSubtitle 'Usage:'
             printCodeBlock 'git chord push'
+            printSubtitle 'Example:'
+            printCodeBlock 'git chord push'
             printSubtitle 'Description:'
-            printParagraph '(* NOT DOCUMENTED YET! *)'
+            printParagraph '(*NOT DOCUMENTED YET!*)'
             exit 0
             ;;
         pull)
@@ -1158,8 +1168,10 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             printTitle 'git chord pull'
             printSubtitle 'Usage:'
             printCodeBlock 'git chord pull'
+            printSubtitle 'Example:'
+            printCodeBlock 'git chord pull'
             printSubtitle 'Description:'
-            printParagraph '(* NOT DOCUMENTED YET! *)'
+            printParagraph '(*NOT DOCUMENTED YET!*)'
             exit 0
             ;;
         spec)

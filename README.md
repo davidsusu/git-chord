@@ -81,35 +81,33 @@ git chord state --verbose
 
 `--[no-]annotatedtags-apply-allowremove`: Allows/disables removing annotated tags. Default: `true`
 
-`--[no-]annotatedtags-apply-allowadd`: Allows/disables adding annotated tags. Default: `true`
-
 `--[no-]lightweighttags-store-enabled`: Enables/disables saving state of tracked lightweight tags. Default: `false`
 
 `--lightweighttags-store-regex`: Sets the regex pattern for saving tracked lightweight tags. Default: `.*`
 
-`--[no-]lightweighttags-apply-enabled`: Enables/disables applying the saved state of tracked lightweight tags. Default: `true`
+`--[no-]lightweighttags-apply-enabled`: Enables/disables applying the saved state of tracked lightweight tags. Default: `false`
 
 `--lightweighttags-apply-regex`: Sets the regex pattern for applying tracked lightweight tags. Default: `.*`
 
 `--[no-]lightweighttags-apply-allowremove`: Allows/disables removing lightweight tags. Default: `false`
 
-`--[no-]lightweighttags-apply-allowadd`: Allows/disables adding lightweight tags. Default: `false`
-
 `--[no-]head-store-enabled`: Enables/disables saving state of the HEAD. Default: `true`
 
 `--[no-]head-apply-enabled`: Allows/disables moving the HEAD. Default: `true`
+
+`--[no-]head-apply-sticktocommit`: Sticks/disables to the commit, moving to detached head if necessary. Default: `false`
+
+`--[no-]stagingarea-followhead`: Make/disables the staging area following HEAD by default. Default: `true`
 
 `--[no-]stagingarea-store-enabled`: Enables/disables saving state of the staging area. Default: `false`
 
 `--[no-]stagingarea-apply-enabled`: Enables/disables applying the saved state of the staging area. Default: `false`
 
-`--[no-]stagingarea-apply-allowoverwrite`: Allows/disables overwriting even a dirty staging area. Default: `false`
+`--[no-]workingtree-followstagingarea`: Make/disables the working tree following the staging area by default. Default: `true`
 
 `--[no-]workingtree-store-enabled`: Enables/disables saving the state of the working tree. Default: `false`
 
 `--[no-]workingtree-apply-enabled`: Enables/disables applying the saved state of the working tree. Default: `false`
-
-`--[no-]workingtree-apply-allowoverwrite`: Allows/disables overwriting even a dirty working tree. Default: `false`
 
 `--[no-]dryrun`: Enables/disables dry-run mode, no modification will be applied. Default: `false`
 
@@ -136,7 +134,13 @@ git chord state --verbose
 ### Usage:
 
 ```
-git chord {-h|help} [<options...>]
+git chord (-h | help)
+```
+
+### Example:
+
+```
+git chord help
 ```
 
 ### Description:
@@ -148,7 +152,13 @@ Prints information about the available subcommands and options.
 ### Usage:
 
 ```
-git chord {-v|version} [<options...>]
+git chord (-v | version)
+```
+
+### Example:
+
+```
+git chord version
 ```
 
 ### Description:
@@ -160,15 +170,15 @@ Prints version of the git chord extension.
 ### Usage:
 
 ```
-git chord config [list] [<options...>]
+git chord config [list]
 ```
 
 ```
-git chord config get <key> [<options...>]
+git chord config get <key>
 ```
 
 ```
-git chord config set <key> <value> [<options...>]
+git chord config set <key> <value>
 ```
 
 ### Example:
@@ -244,6 +254,12 @@ git chord apply [<name>] [-n]
 git chord apply - <revision>
 ```
 
+### Example:
+
+```
+git chord apply -3
+```
+
 ### Description:
 
 Applies the specified stored state. If you use no parameters, last state on the 
@@ -255,9 +271,19 @@ will refer to the nth ascendant in the first-parent history. If you use the
 arbitrary committish It will indicate an error if the specified revision is not 
 a snapshot commit.
 
+Be careful when using the working tree, as this will cause a hard reset. In 
+this case, all local changes will be saved into the stash, then erased from the 
+file system.
+
 ## git chord state
 
 ### Usage:
+
+```
+git chord state
+```
+
+### Exaple:
 
 ```
 git chord state
@@ -338,9 +364,15 @@ in the same way as `<name>`, `<m>` as `<n>`, and `<revision2>` as `<revision>`
 git chord push
 ```
 
+### Example:
+
+```
+git chord push
+```
+
 ### Description:
 
-** NOT DOCUMENTED YET! **
+**NOT DOCUMENTED YET!**
 
 ## git chord pull
 
@@ -350,9 +382,15 @@ git chord push
 git chord pull
 ```
 
+### Example:
+
+```
+git chord pull
+```
+
 ### Description:
 
-** NOT DOCUMENTED YET! **
+**NOT DOCUMENTED YET!**
 
 ## git chord spec
 
