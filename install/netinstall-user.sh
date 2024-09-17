@@ -12,5 +12,6 @@ git clone "$GIT_URL" .
 
 # TODO: decide which installer to use
 ./install/install-user-bashrc-path.sh
+./install/install-user-manpage.sh
 
 cd "$startDir"

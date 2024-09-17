@@ -19,7 +19,7 @@ if ! touch "$bashRcFile" > /dev/null 2>&1; then
     echo "Failed to create bashrc file, exiting." >&2
     exit 1
 fi
-echo "PATH=\"\$PATH:${projectRootDir}/bin\"" > "$bashRcFile"
+printf '%s\n' "export PATH=\"\$PATH:${projectRootDir}/bin\"" > "$bashRcFile"
 
 if [ -f "$completionBashRcFile" ]; then
     echo "Completion bashrc file with the same name is already exist (${bashRcFile}), removing..."
