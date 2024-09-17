@@ -1941,9 +1941,9 @@ EOF
                 printf '%s%s%s\n\n' "$formatInfo" 'No difference detected' "$formatInfoEnd"
             fi
         else
-            tempYamlFile1="$( mktemp )"
+            tempYamlFile1="$( mktemp )" # FIXME: mktemp is not POSIX
             printf '%s\n' "$stateYaml1" > "$tempYamlFile1"
-            tempYamlFile2="$( mktemp )"
+            tempYamlFile2="$( mktemp )" # FIXME: mktemp is not POSIX
             printf '%s\n' "$stateYaml2" > "$tempYamlFile2"
             if checkTruthy "$configValue_color"; then
                 diff -u -U3 --color "$tempYamlFile1" "$tempYamlFile2"
