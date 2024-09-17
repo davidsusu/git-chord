@@ -1155,16 +1155,21 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             exit 0
             ;;
         push)
-            
-            # TODO: push
-            
             printTitle 'git chord push'
             printSubtitle 'Usage:'
             printCodeBlock 'git chord push'
             printSubtitle 'Example:'
             printCodeBlock 'git chord push'
             printSubtitle 'Description:'
-            printParagraph '(*NOT DOCUMENTED YET!*)'
+            printParagraph \
+                'Pushes the default or all (using the (`--all`) option) tracker branches.' \
+                'In the case of branches for which a remote is already set, this remote will be used.' \
+                'The other branches will be assigned the default remote' \
+                '(config key: (`trackers.remotes.default`)), if the automatic association' \
+                '(config key: (`trackers.remotes.allowautoassociate`)) is enabled.' \
+                'The operation is not atomic, each branch will be handled separately,' \
+                'and in case of error, the operation will be continued.' \
+            ;
             exit 0
             ;;
         pull)
@@ -1967,21 +1972,27 @@ EOF
             remoteName="$( git config "branch.${trackerBranch}.remote" )"
             remoteBranch="$( git for-each-ref --format='%(upstream:short)' "refs/heads/${trackerBranch}" )"
             if [ -z "$remoteBranch" ]; then
-                logInfoMessage "No remote is set for ${trackerBranch}, setup..."
-                if [ -z "$configValue_trackers_remotes_default" ]; then
-                    logWarningMessage 'No default remote is set'
-                    continue
-                elif ! git remote get-url "$configValue_trackers_remotes_default" > /dev/null 2>/dev/null; then
-                    logWarningMessage "The default remote doesn't exist: ${configValue_trackers_remotes_default}"
-                    continue
-                fi
-                remoteName="$configValue_trackers_remotes_default"
-                remoteBranch="$trackerBranch"
-                if ! checkTruthy "$configValue_dryrun"; then
-                    if ! git branch --set-upstream-to="${configValue_trackers_remotes_default}/${remoteBranch}" "$trackerBranch"; then
-                        logWarningMessage "Failed to setup remote for ${trackerBranch}"
+                logInfoMessage "No remote is set for ${trackerBranch}"
+                if checkTruthy "$configKey_trackers_remotes_allowautoassociate"; then
+                    logInfoMessage "Setup remote for ${trackerBranch}"
+                    if [ -z "$configValue_trackers_remotes_default" ]; then
+                        logWarningMessage 'No default remote is set'
+                        continue
+                    elif ! git remote get-url "$configValue_trackers_remotes_default" > /dev/null 2>/dev/null; then
+                        logWarningMessage "The default remote doesn't exist: ${configValue_trackers_remotes_default}"
                         continue
                     fi
+                    remoteName="$configValue_trackers_remotes_default"
+                    remoteBranch="$trackerBranch"
+                    if ! checkTruthy "$configValue_dryrun"; then
+                        if ! git branch --set-upstream-to="${configValue_trackers_remotes_default}/${remoteBranch}" "$trackerBranch"; then
+                            logWarningMessage "Failed to setup remote for ${trackerBranch}"
+                            continue
+                        fi
+                    fi
+                else
+                    logInfoMessage "Skip ${trackerBranch}, remote autoassociate is disabled"
+                    continue
                 fi
             fi 
             logInfoMessage "Push tracker branch ${trackerBranch} to ${trackerBranch}:${remoteBranch}"
