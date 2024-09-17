@@ -6,12 +6,24 @@ TODO
 
 ## Installation
 
-Currently no packaged version is available.
-However, you can find two installer scripts in the `install` directory:
+The simplest way to install git-chord is using the netinstaller:
+
+```shell
+curl -s https://raw.githubusercontent.com/davidsusu/git-chord/main/install/netinstall-user.sh | sh
+```
+
+This will clone the source repository to the `git-chord` directory in the home directory,
+and execute the bashrc based per-user intaller.
+
+If you want to install it manually, you can use one of the installer scripts
+can be found the `install` directory:
 
 - `install-global-usrlocalbin.sh`: general global installer, requires root permission
 - `install-user-bashrc-path.sh`: user-scope installer for bash environments,
    also installs bash autocompletion for the `git chord` subcommands and options
+- `netinstall-user.sh`: netinstaller script, clones the repository, and install the extension
+
+Currently no packaged version is available.
 
 ## Usage:
 
@@ -57,7 +69,7 @@ git chord state --verbose
 
 `--trackers-remotes-default`: Sets the default remote name for tracker branches. Default: `origin`
 
-`--[no-]trackers-remotes-allowautoadd`: Allows/disables automatically adding the default remote if necessary. Default: `true`
+`--[no-]trackers-remotes-allowautoassociate`: Allows/disables automatically associate the default remote if necessary. Default: `true`
 
 `--[no-]branches-store-enabled`: Enables/disables saving state of tracked branches. Default: `true`
 
@@ -372,7 +384,13 @@ git chord push
 
 ### Description:
 
-*NOT DOCUMENTED YET!*
+Pushes the default or all (using the `--all` option) tracker branches. In the 
+case of branches for which a remote is already set, this remote will be used. 
+The other branches will be assigned the default remote (config key: 
+`trackers.remotes.default`), if the automatic association (config key: 
+`trackers.remotes.allowautoassociate`) is enabled. The operation is not atomic, 
+each branch will be handled separately, and in case of error, the operation 
+will be continued.
 
 ## git chord pull
 
