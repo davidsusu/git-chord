@@ -4,11 +4,34 @@ printf '%s' '# Git chord - repository state manager
 
 ## Introduction
 
-TODO
+Git chord is a git extension that adds the `chord` subcommand to git,
+using wich you can create, browse, manipulate, and share
+snapshots of the state of a git repository.
+
+It'"'"'s that easy to take a snapshot (using the default settings):
+
+```shell
+git chord snapshot
+```
+
+And later you can restore the saved state:
+
+```shell
+git chord apply
+```
+
+Of course, you can save multiple snapshots, even on multiple tracker branches,
+and you also have a freedom in applying any of them.
+
+By default, a snapshot contains the status of all branches, annotated tags, and the HEAD.
+By changing the settings, you can control, for example, which branches and tags should be saved,
+and you can also require lightweight tags, dirty staging area, and dirty working tree to be saved.
+Git chord is fully customizable via git config and ad hoc comand line options,
+[see below for the available options](#options).
 
 ## Installation
 
-The simplest way to install git-chord is using the netinstaller:
+The simplest way to install the git-chord command is using the netinstaller:
 
 ```shell
 curl -s https://raw.githubusercontent.com/davidsusu/git-chord/main/install/netinstall-user.sh | sh
