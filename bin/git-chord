@@ -1967,6 +1967,7 @@ EOF
             fi
             trackerBranches="$( appendLine "$trackerBranches" "$defaultTrackerBranch" )"
         fi
+        
         printf '%s\n' "$trackerBranches" | while IFS= read -r trackerBranch; do
             logInfoMessage "Push tracker branch: ${trackerBranch}"
             remoteName="$( git config "branch.${trackerBranch}.remote" )"
@@ -1994,7 +1995,8 @@ EOF
                     logInfoMessage "Skip ${trackerBranch}, remote autoassociate is disabled"
                     continue
                 fi
-            fi 
+            fi
+            
             logInfoMessage "Push tracker branch ${trackerBranch} to ${trackerBranch}:${remoteBranch}"
             if ! checkTruthy "$configValue_dryrun"; then
                 if ! git push "$remoteName" "${trackerBranch}:${remoteBranch}"; then
