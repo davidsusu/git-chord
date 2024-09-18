@@ -1216,16 +1216,21 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             exit 0
             ;;
         pull)
-            
-            # TODO: pull
-            
             printTitle 'git chord pull'
             printSubtitle 'Usage:'
             printCodeBlock 'git chord pull'
             printSubtitle 'Example:'
             printCodeBlock 'git chord pull'
             printSubtitle 'Description:'
-            printParagraph '(*NOT DOCUMENTED YET!*)'
+            printParagraph \
+                'Fetches and rebases the default or all (using the (`--all`) option) tracker branches.' \
+                'In the case of branches for which a remote is already set, this remote will be used.' \
+                'The other branches will be assigned the default remote' \
+                '(config key: (`trackers.remotes.default`)), if the automatic association' \
+                '(config key: (`trackers.remotes.allowautoassociate`)) is enabled.' \
+                'The operation is not atomic, each branch will be handled separately,' \
+                'and in case of error, the operation will be continued.' \
+            ;
             exit 0
             ;;
         spec)
@@ -2017,8 +2022,30 @@ EOF
         exit 0
         ;;
     pull)
-        printf '%sERROR: %s%s\n' "$formatError" 'The pull command is not implemented yet' "$formatErrorEnd" >&2
-        exit 1
+        if ! trackerBranches="$( printTrackerBranchesForSync )"; then
+            exit 1
+        fi
+        
+        printf '%s\n' "$trackerBranches" | while IFS= read -r trackerBranch; do
+            logInfoMessage "Pull tracker branch: ${trackerBranch}"
+            setupRemoteNameAndRemoteBranchForSync "$trackerBranch"
+            trackerRemoteBranch="${trackerBranch}/${remoteBranch}"
+            logInfoMessage "Fetch tracker remote branch ${trackerRemoteBranch}"
+            if ! checkTruthy "$configValue_dryrun"; then
+                if ! git push "$remoteName" "${trackerBranch}:${remoteBranch}"; then
+                    logWarningMessage "Failed to fetch tracker remote branch ${trackerRemoteBranch}"
+                    continue
+                fi
+            fi
+            logInfoMessage "Rebase tracker branch ${trackerBranch} on ${trackerRemoteBranch}"
+            if ! checkTruthy "$configValue_dryrun"; then
+                if ! git rebase "$trackerBranch" "$trackerRemoteBranch"; then
+                    logWarningMessage "Failed to rebase tracker branch ${trackerBranch}"
+                    continue
+                fi
+            fi
+        done
+        exit 0
         ;;
     *)
         printf '%sERROR: %s%s\n' "$formatError" 'Unknown command' "$formatErrorEnd" >&2

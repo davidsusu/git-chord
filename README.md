@@ -431,7 +431,13 @@ git chord pull
 
 ### Description:
 
-*NOT DOCUMENTED YET!*
+Fetches and rebases the default or all (using the `--all` option) tracker 
+branches. In the case of branches for which a remote is already set, this 
+remote will be used. The other branches will be assigned the default remote 
+(config key: `trackers.remotes.default`), if the automatic association (config 
+key: `trackers.remotes.allowautoassociate`) is enabled. The operation is not 
+atomic, each branch will be handled separately, and in case of error, the 
+operation will be continued.
 
 ## git chord spec
 
