@@ -1010,26 +1010,25 @@ setupRemoteNameAndRemoteBranchForSync() { # $1: trackerBranch
     remoteBranch="$( git for-each-ref --format='%(upstream:short)' "refs/heads/${1}" )"
     if [ -z "$remoteBranch" ]; then
         logInfoMessage "No remote is set for ${1}"
-        if checkTruthy "$configValue_trackers_remotes_allowautoassociate"; then
-            logInfoMessage "Setup remote for ${1}"
-            if [ -z "$configValue_trackers_remotes_default" ]; then
-                logWarningMessage 'No default remote is set'
-                continue
-            elif ! git remote get-url "$configValue_trackers_remotes_default" > /dev/null 2>/dev/null; then
-                logWarningMessage "The default remote doesn't exist: ${configValue_trackers_remotes_default}"
-                continue
-            fi
-            remoteName="$configValue_trackers_remotes_default"
-            remoteBranch="$1"
-            if ! checkTruthy "$configValue_dryrun"; then
-                if ! git branch --set-upstream-to="${configValue_trackers_remotes_default}/${remoteBranch}" "$1"; then
-                    logWarningMessage "Failed to setup remote for ${1}"
-                    continue
-                fi
-            fi
-        else
+        if ! checkTruthy "$configValue_trackers_remotes_allowautoassociate"; then
             logInfoMessage "Skip ${1}, remote autoassociate is disabled"
-            continue
+            return
+        fi
+        logInfoMessage "Setup remote for ${1}"
+        if [ -z "$configValue_trackers_remotes_default" ]; then
+            logWarningMessage 'No default remote is set'
+            return
+        elif ! git remote get-url "$configValue_trackers_remotes_default" > /dev/null 2>/dev/null; then
+            logWarningMessage "The default remote doesn't exist: ${configValue_trackers_remotes_default}"
+            return
+        fi
+        remoteName="$configValue_trackers_remotes_default"
+        remoteBranch="$1"
+        if ! checkTruthy "$configValue_dryrun"; then
+            if ! git branch --set-upstream-to="${configValue_trackers_remotes_default}/${remoteBranch}" "$1"; then
+                logWarningMessage "Failed to setup remote for ${1}"
+                return
+            fi
         fi
     fi
 }
