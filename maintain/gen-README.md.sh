@@ -1,5 +1,8 @@
 #!/bin/sh
 
+projectRootDir="$( realpath "$( dirname -- "$( realpath "$0" )" )"/.. )"
+chordDevCommand="${projectRootDir}/bin/git-chord"
+
 printf '%s' '# Git chord - repository state manager
 
 ## Introduction
@@ -51,8 +54,8 @@ can be found the `install` directory:
 Currently no packaged version is available.
 ';
 
-git chord help --verbose --markdown | sed -E 's/^`(\w+)`:/[`\1`](#git-chord-\1)/' | tail -n +2
+"$chordDevCommand" help --verbose --markdown | sed -E 's/^`(\w+)`:/[`\1`](#git-chord-\1)/' | tail -n +2
 
-git chord spec commands | while IFS=' ' read -r command subCommands; do
+"$chordDevCommand" spec commands | while IFS=' ' read -r command subCommands; do
     git chord "$command" help --verbose --markdown | sed 's/^#/##/'
 done
