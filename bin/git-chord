@@ -23,28 +23,28 @@ OPTIONS="$( printf '%s' '
 trackers.prefix chord/ # Sets the tracker branch prefix
 trackers.name main # Sets the tracker branch name
 trackers.remotes.default origin # Sets the default remote name for tracker branches
-trackers.remotes.allowautoassociate true # Allows automatically associate the default remote if necessary
-branches.store.enabled true # Enables saving state of tracked branches
+trackers.remotes.allowautoassociate true # Allows automatic associating of the default remote if necessary
+branches.store.enabled true # Enables saving the state of tracked branches
 branches.store.regex .* # Sets the regex pattern for saving tracked branches
 branches.apply.enabled true # Enables applying the saved state of tracked branches
 branches.apply.regex .* # Sets the regex pattern for applying tracked branches
 branches.apply.allowremove true # Allows removing branches
 branches.apply.allowadd true # Allows adding branches
-annotatedtags.store.enabled true # Enables saving state of tracked annotated tags
+annotatedtags.store.enabled true # Enables saving the state of tracked annotated tags
 annotatedtags.store.regex .* # Sets the regex pattern for saving tracked annotated tags
 annotatedtags.apply.enabled true # Enables applying the saved state of tracked annotated tags
 annotatedtags.apply.regex .* # Sets the regex pattern for applying tracked annotated tags
 annotatedtags.apply.allowremove true # Allows removing annotated tags
-lightweighttags.store.enabled false # Enables saving state of tracked lightweight tags
+lightweighttags.store.enabled false # Enables saving the state of tracked lightweight tags
 lightweighttags.store.regex .* # Sets the regex pattern for saving tracked lightweight tags
 lightweighttags.apply.enabled false # Enables applying the saved state of tracked lightweight tags
 lightweighttags.apply.regex .* # Sets the regex pattern for applying tracked lightweight tags
 lightweighttags.apply.allowremove false # Allows removing lightweight tags
-head.store.enabled true # Enables saving state of the HEAD
+head.store.enabled true # Enables saving the state of the HEAD
 head.apply.enabled true # Allows moving the HEAD
-head.apply.sticktocommit false # Sticks to the commit, moving to detached head if necessary
+head.apply.sticktocommit false # Sticks to the commit, switches to detached head if necessary
 stagingarea.followhead true # Make the staging area following HEAD by default
-stagingarea.store.enabled false # Enables saving state of the staging area
+stagingarea.store.enabled false # Enables saving the state of the staging area
 stagingarea.apply.enabled false # Enables applying the saved state of the staging area
 workingtree.followstagingarea true # Make the working tree following the staging area by default
 workingtree.store.enabled false # Enables saving the state of the working tree

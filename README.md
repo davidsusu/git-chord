@@ -92,9 +92,9 @@ git chord state --verbose
 
 `--trackers-remotes-default`: Sets the default remote name for tracker branches. Default: `origin`
 
-`--[no-]trackers-remotes-allowautoassociate`: Allows/disables automatically associate the default remote if necessary. Default: `true`
+`--[no-]trackers-remotes-allowautoassociate`: Allows/disables automatic associating of the default remote if necessary. Default: `true`
 
-`--[no-]branches-store-enabled`: Enables/disables saving state of tracked branches. Default: `true`
+`--[no-]branches-store-enabled`: Enables/disables saving the state of tracked branches. Default: `true`
 
 `--branches-store-regex`: Sets the regex pattern for saving tracked branches. Default: `.*`
 
@@ -106,7 +106,7 @@ git chord state --verbose
 
 `--[no-]branches-apply-allowadd`: Allows/disables adding branches. Default: `true`
 
-`--[no-]annotatedtags-store-enabled`: Enables/disables saving state of tracked annotated tags. Default: `true`
+`--[no-]annotatedtags-store-enabled`: Enables/disables saving the state of tracked annotated tags. Default: `true`
 
 `--annotatedtags-store-regex`: Sets the regex pattern for saving tracked annotated tags. Default: `.*`
 
@@ -116,7 +116,7 @@ git chord state --verbose
 
 `--[no-]annotatedtags-apply-allowremove`: Allows/disables removing annotated tags. Default: `true`
 
-`--[no-]lightweighttags-store-enabled`: Enables/disables saving state of tracked lightweight tags. Default: `false`
+`--[no-]lightweighttags-store-enabled`: Enables/disables saving the state of tracked lightweight tags. Default: `false`
 
 `--lightweighttags-store-regex`: Sets the regex pattern for saving tracked lightweight tags. Default: `.*`
 
@@ -126,15 +126,15 @@ git chord state --verbose
 
 `--[no-]lightweighttags-apply-allowremove`: Allows/disables removing lightweight tags. Default: `false`
 
-`--[no-]head-store-enabled`: Enables/disables saving state of the HEAD. Default: `true`
+`--[no-]head-store-enabled`: Enables/disables saving the state of the HEAD. Default: `true`
 
 `--[no-]head-apply-enabled`: Allows/disables moving the HEAD. Default: `true`
 
-`--[no-]head-apply-sticktocommit`: Sticks/disables to the commit, moving to detached head if necessary. Default: `false`
+`--[no-]head-apply-sticktocommit`: Sticks/disables to the commit, switches to detached head if necessary. Default: `false`
 
 `--[no-]stagingarea-followhead`: Make/disables the staging area following HEAD by default. Default: `true`
 
-`--[no-]stagingarea-store-enabled`: Enables/disables saving state of the staging area. Default: `false`
+`--[no-]stagingarea-store-enabled`: Enables/disables saving the state of the staging area. Default: `false`
 
 `--[no-]stagingarea-apply-enabled`: Enables/disables applying the saved state of the staging area. Default: `false`
 
