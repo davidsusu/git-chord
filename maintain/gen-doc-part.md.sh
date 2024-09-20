@@ -7,11 +7,11 @@ partName="$1"
 
 case "$partName" in
     general)
-printf '%s' '# Git chord - repository state manager
+printf '%s' '# Git Chord - repository state manager
 
 ## Introduction
 
-Git chord is a git extension that adds the `chord` subcommand to git,
+Git Chord is a git extension that adds the `chord` subcommand to git,
 using wich you can create, browse, manipulate, and share
 snapshots of the state of a git repository.
 
@@ -33,8 +33,16 @@ and you also have a freedom in applying any of them.
 By default, a snapshot contains the status of all branches, annotated tags, and the HEAD.
 By changing the settings, you can control, for example, which branches and tags should be saved,
 and you can also require lightweight tags, dirty staging area, and dirty working tree to be saved.
-Git chord is fully customizable via git config and ad hoc comand line options,
+Git Chord is fully customizable via git config and ad hoc comand line options,
 [see below for the available options](#options).
+
+Git Chord is particularly suitable for the following situations:
+
+- when there is a need for sharing a constellation of the branches, across the team
+- when you want to snapshot the repository state before a complex sequence of git operations
+- when students are expected to submit their work as an overall repository state
+- when you want to use multiple branches to deploy and rollback service configurations
+- when you want to memoize specific states of the repository and browse the history of these
 
 ## Installation
 
