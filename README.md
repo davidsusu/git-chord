@@ -86,7 +86,7 @@ git chord state --verbose
 
 [`diff`](#git-chord-diff) Shows diff between a previously saved snapshot and the current state.
 
-[`delete`](#git-chord-delete) Delete a previously saved snapshot.
+[`delete`](#git-chord-delete) Deletes a previously saved snapshot.
 
 [`push`](#git-chord-push) Pushes the default chord branch (or using `--all`: all chord branches).
 

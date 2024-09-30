@@ -12,7 +12,7 @@ apply # Applies a previously saved snapshot to the repository
 state # Shows the current state based on the configuration
 show # Shows full data of a previously saved snapshot
 diff # Shows diff between a previously saved snapshot and the current state
-delete # Delete a previously saved snapshot
+delete # Deletes a previously saved snapshot
 push # Pushes the default chord branch (or using (`--all`): all chord branches)
 pull # Pulls the default chord branch (or using (`--all`): all chord branches)
 spec commands options # Gets special information mainly for machine processing
