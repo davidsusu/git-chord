@@ -86,6 +86,8 @@ git chord state --verbose
 
 [`diff`](#git-chord-diff) Shows diff between a previously saved snapshot and the current state.
 
+[`delete`](#git-chord-delete) Delete a previously saved snapshot.
+
 [`push`](#git-chord-push) Pushes the default chord branch (or using `--all`: all chord branches).
 
 [`pull`](#git-chord-pull) Pulls the default chord branch (or using `--all`: all chord branches).
@@ -398,6 +400,30 @@ revision. the current state means the data that would be printed using the
 as for the `show` command. If you specify a second revision, it will be used 
 for the comparison instead of the current state. `<name2>` will be interpreted 
 in the same way as `<name>`, `<m>` as `<n>`, and `<revision2>` as `<revision>`
+
+## git chord delete
+
+### Usage:
+
+```
+git chord delete [<name>] [-<n>]
+```
+
+### Example:
+
+```
+git chord delete -3
+```
+
+### Description:
+
+Deletes a stored snapshot. If you use no parameters, last commit on the default 
+tracker branch will be deleted. If you use the `<name>` parameter, this branch 
+name, with the default prefix, will be used, and the last commit in this branch 
+will be deleted. In these cases, if you use the `-<n>` parameter, where `<n>` 
+is a non-negative whole number, you will refer to the nth ascendant in the 
+first-parent history. If you refer to a non-snapshot commit, no deletion will 
+be done, and an error message will be printed.
 
 ## git chord push
 
