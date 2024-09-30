@@ -1547,6 +1547,9 @@ EOF
         stateParentIdsParams=$( printf '%s' "$parentCommitIds" | sed -E 's/^/-p /' )
         stateCommitId="$( git commit-tree "$stateTreeId" -m "Chord repository state at ${timestamp}" $stateParentIdsParams )"
         git update-ref refs/heads/"$targetBranch" "$stateCommitId"
+        
+        printf '%sSUCCESS: %s: %s%s\n' "$formatSuccess" 'Snapshot was successfully created' "$stateCommitId" "$formatSuccessEnd"
+        
         ;;
     apply)
         
@@ -2025,14 +2028,14 @@ EOF
     delete)
         nameArg="$( getNthLine "$nonOptArgs" 1 )"
         if [ -z "$nameArg" ]; then
-            trackerRef="${configValue_trackers_prefix}${configValue_trackers_name}"
-            stateRevision="$trackerRef"
+            targetBranch="${configValue_trackers_prefix}${configValue_trackers_name}"
+            stateRevision="$targetBranch"
         elif checkStartsWith "$nameArg" '-'; then
-            trackerRef="${configValue_trackers_prefix}${configValue_trackers_name}"
-            stateRevision="$trackerRef$( printf '%s\n' "$nameArg" | sed -E 's/^\-/~/' )"
+            targetBranch="${configValue_trackers_prefix}${configValue_trackers_name}"
+            stateRevision="${targetBranch}$( printf '%s\n' "$nameArg" | sed -E 's/^\-/~/' )"
         else
-            trackerRef="${configValue_trackers_prefix}${nameArg}"
-            stateRevision="$trackerRef"
+            targetBranch="${configValue_trackers_prefix}${nameArg}"
+            stateRevision="$targetBranch"
             offsetArg="$( getNthLine "$nonOptArgs" 2 )"
             if checkStartsWith "$offsetArg" '-'; then
                 stateRevision="${stateRevision}$( printf '%s\n' "$offsetArg" | sed -E 's/^\-/~/' )"
@@ -2051,21 +2054,23 @@ EOF
             printf '%sERROR: %s: %s%s\n' "$formatError" 'Orphan commit deletion is not supported' "$stateRevision" "$formatErrorEnd" >&2
             exit 1
         fi
-        if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
-            logInfoMessage "Delete snapshot at ${stateRevision}"
-        fi
         commitId="$( git rev-parse "$stateRevision" )"
+        logInfoMessage "Delete snapshot at ${stateRevision}, commit id: ${commitId}"
+        while IFS=' ' read -r originalCommitId treeId; do
+            commitMessage="$( git log -n 1 --format="%B" "$originalCommitId" )"
+            currentParentCommitId="$( git rev-parse --verify "${originalCommitId}^" 2>/dev/null )"
+            additionalParents="$( git show -s --format=%P "$originalCommitId" | cut -d' ' -f2- )"
+            additionalParentArguments="$( printf '%s\n' "$additionalParents" | sed -E 's/\b\w/-p &/g' )"
+            newCommitId="$( git commit-tree -p "$parentCommitId" $additionalParentArguments -m "$commitMessage" "$treeId" )"
+            logInfoMessage "Replace first-parent of ${originalCommitId} from ${currentParentCommitId} to ${parentCommitId}, resulting commit: ${newCommitId}"
+            parentCommitId="${newCommitId}"
+        done <<EOF
+$( git log "$commitId".."$targetBranch" --first-parent --reverse --format="%H %T" )
+EOF
         
-        # TODO
-        logInfoMessage "$stateRevision --> $commitId"
-        logInfoMessage "P: $parentCommitId"
-        git log "$commitId".."$trackerRef" --first-parent --reverse --format="%H" | while IFS='' read -r originalCommitId; do
-            logInfoMessage "ORIGINAL: ${originalCommitId}"
-        done
+        git update-ref refs/heads/"$targetBranch" "$parentCommitId"
         
-        # FIXME
-        printf '%sERROR: %s%s\n' "$formatError" 'This command is not implemented yet!' "$formatErrorEnd" >&2
-        exit 1
+        printf '%sSUCCESS: %s: %s%s\n' "$formatSuccess" 'Snapshot was successfully deleted' "$commitId" "$formatSuccessEnd"
         
         exit 0
         ;;
