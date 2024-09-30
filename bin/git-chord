@@ -12,6 +12,7 @@ apply # Applies a previously saved snapshot to the repository
 state # Shows the current state based on the configuration
 show # Shows full data of a previously saved snapshot
 diff # Shows diff between a previously saved snapshot and the current state
+delete # Delete a previously saved snapshot
 push # Pushes the default chord branch (or using (`--all`): all chord branches)
 pull # Pulls the default chord branch (or using (`--all`): all chord branches)
 spec commands options # Gets special information mainly for machine processing
@@ -1196,6 +1197,25 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             ;
             exit 0
             ;;
+        delete)
+            printTitle 'git chord delete'
+            printSubtitle 'Usage:'
+            printCodeBlock 'git chord delete [<name>] [-<n>]'
+            printSubtitle 'Example:'
+            printCodeBlock 'git chord delete -3'
+            printSubtitle 'Description:'
+            printParagraph \
+                'Deletes a stored snapshot.' \
+                'If you use no parameters, last commit on the default tracker branch will be deleted.' \
+                'If you use the (`<name>`) parameter, this branch name, with the default prefix, will be used,' \
+                'and the last commit in this branch will be deleted.' \
+                'In these cases, if you use the (`-<n>`) parameter, where (`<n>`) is a non-negative whole number,' \
+                'you will refer to the nth ascendant in the first-parent history.' \
+                'If you refer to a non-snapshot commit, no deletion will be done,' \
+                'and an error message will be printed.' \
+            ;
+            exit 0
+            ;;
         push)
             printTitle 'git chord push'
             printSubtitle 'Usage:'
@@ -2000,6 +2020,53 @@ EOF
             rm "$tempYamlFile1"
             rm "$tempYamlFile2"
         fi
+        exit 0
+        ;;
+    delete)
+        nameArg="$( getNthLine "$nonOptArgs" 1 )"
+        if [ -z "$nameArg" ]; then
+            trackerRef="${configValue_trackers_prefix}${configValue_trackers_name}"
+            stateRevision="$trackerRef"
+        elif checkStartsWith "$nameArg" '-'; then
+            trackerRef="${configValue_trackers_prefix}${configValue_trackers_name}"
+            stateRevision="$trackerRef$( printf '%s\n' "$nameArg" | sed -E 's/^\-/~/' )"
+        else
+            trackerRef="${configValue_trackers_prefix}${nameArg}"
+            stateRevision="$trackerRef"
+            offsetArg="$( getNthLine "$nonOptArgs" 2 )"
+            if checkStartsWith "$offsetArg" '-'; then
+                stateRevision="${stateRevision}$( printf '%s\n' "$offsetArg" | sed -E 's/^\-/~/' )"
+            elif [ -n "$offsetArg" ]; then
+                printf '%sERROR: %s: %s%s\n' "$formatError" 'Illegal offset argument' "$offsetArg" "$formatErrorEnd" >&2
+                exit 1
+            fi
+        fi
+        revPath="${stateRevision}:${STATE_FILE}"
+        if ! git show "$revPath" 2>/dev/null > /dev/null; then
+            printf '%sERROR: %s: %s%s\n' "$formatError" 'Not a snapshot commit' "$stateRevision" "$formatErrorEnd" >&2
+            exit 1
+        fi
+        parentCommitId="$( git rev-parse --verify "${stateRevision}^" 2>/dev/null )"
+        if [ -z "$parentCommitId" ]; then
+            printf '%sERROR: %s: %s%s\n' "$formatError" 'Orphan commit deletion is not supported' "$stateRevision" "$formatErrorEnd" >&2
+            exit 1
+        fi
+        if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
+            logInfoMessage "Delete snapshot at ${stateRevision}"
+        fi
+        commitId="$( git rev-parse "$stateRevision" )"
+        
+        # TODO
+        logInfoMessage "$stateRevision --> $commitId"
+        logInfoMessage "P: $parentCommitId"
+        git log "$commitId".."$trackerRef" --first-parent --reverse --format="%H" | while IFS='' read -r originalCommitId; do
+            logInfoMessage "ORIGINAL: ${originalCommitId}"
+        done
+        
+        # FIXME
+        printf '%sERROR: %s%s\n' "$formatError" 'This command is not implemented yet!' "$formatErrorEnd" >&2
+        exit 1
+        
         exit 0
         ;;
     push)
