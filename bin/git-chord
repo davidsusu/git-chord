@@ -1993,7 +1993,7 @@ EOF
             fi
             if checkTruthy "$configValue_markdown"; then
                 command="${command} --oneline --color=never | escapeMarkdown | sed -E 's/^/- /'"
-            elif ! checkTruthy "$configValue_color"; then
+            elif checkTruthy "$configValue_color"; then
                 command="${command} --oneline --color=always"
             else
                 command="${command} --oneline --color=never"
