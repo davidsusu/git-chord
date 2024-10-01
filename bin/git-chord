@@ -1994,6 +1994,7 @@ EOF
                 command="${command} --oneline --color=never"
             fi
             eval "$command"
+            printf '\n'
         done
         exit 0
         ;;
