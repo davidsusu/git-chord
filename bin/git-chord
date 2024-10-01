@@ -94,7 +94,7 @@ appendLine() { # $1: array, $2:newLineOrLines
 }
 
 getNthLine() { # $1: lines, $2 lineNo
-    printf '%s\n' "$1" | sed "${2}q;d"
+    printf '%s' "$1" | sed "${2}q;d"
 }
 
 repeatChar() { # $1: char, $2: length
@@ -102,11 +102,14 @@ repeatChar() { # $1: char, $2: length
 }
 
 normalizeKey() { # $1: rawKey
-    printf '%s\n' "$1" | sed -E 's/^\-\-(no\-)?//i' | tr '-' '.' | tr '[:upper:]' '[:lower:]'
+    printf '%s' "$1" | sed -E 's/^\-\-(no\-)?//i' | tr '-' '.' | tr '[:upper:]' '[:lower:]'
 }
 
 escapeValue() { # $1: value
-    printf '%s\n' "$1" | sed "s/'/'\\\\''/g"
+    case "$1" in
+        *"'"*) printf '%s' "$1" | sed "s/'/'\\\\''/g" ;;
+        *) printf '%s' "$1" ;;
+    esac
 }
 
 checkBoolValue() { # $1: valueToCheck
@@ -273,7 +276,7 @@ getArgumentValue() ( # $1: arg, $2: isBool
             echo 'true'
         fi
     else
-        printf '%s\n' "$candidate"
+        printf '%s' "$candidate"
     fi
 )
 
@@ -440,13 +443,15 @@ fi
 
 subcommand="$( getNthLine "$nonOptArgs" 1 )"
 
-while IFS= read -r configLine; do
-    configValue="$( printf '%s\n' "$configLine" | cut -d ' ' -f 2- )"
-    outVariableName="configValue_$( printf '%s\n' "$configLine" | cut -d ' ' -f 1 | tr '.' '_' )"
-    eval "${outVariableName}='$( escapeValue "$configValue")'"
-done <<EOF
-$( printf '%s\n' "$config" )
+eval "$(
+    while IFS=' ' read -r outVariableName configValue; do
+        printf "configValue_%s='" "$outVariableName"
+        escapeValue "$configValue"
+        printf "'\n"
+    done <<EOF
+$( printf '%s\n' "$config" | awk '{gsub(/\./, "_", $1); print}' )
 EOF
+)"
 
 formatError=''
 formatErrorEnd=''
