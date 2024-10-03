@@ -3,8 +3,7 @@
 
 VERSION='0.1.0-SNAPSHOT'
 
-COMMANDS="$( printf '%s' '
-help # Prints help (also works: (`-h`))
+COMMANDS='help # Prints help (also works: (`-h`))
 version # Prints version of the chord extension (also works: (`-v`))
 config get set list # Prints the current chord configuration (use (`--defaults`) to see the defaults)
 snapshot # Creates a snapshot of the repository state
@@ -17,12 +16,11 @@ delete # Deletes a previously saved snapshot
 push # Pushes the default chord branch (or using (`--all`): all chord branches)
 pull # Pulls the default chord branch (or using (`--all`): all chord branches)
 spec commands options # Gets special information mainly for machine processing
-' | tail -n +2 )"
+'
 
 DEFAULT_COMMAND='snapshot'
 
-OPTIONS="$( printf '%s' '
-trackers.prefix chord/ # Sets the tracker branch prefix
+OPTIONS='trackers.prefix chord/ # Sets the tracker branch prefix
 trackers.name main # Sets the tracker branch name
 trackers.remotes.default origin # Sets the default remote name for tracker branches
 trackers.remotes.allowautoassociate true # Allows automatic associating of the default remote if necessary
@@ -57,12 +55,13 @@ color true # Enables color mode, ANSI escapes will be used in the output
 markdown false # Enables markdown mode, output will be formatted as a markdown document
 defaults false # Enables default mode, the default configuration will be used and printed (forcefully)
 all false # Enables the operation for all related objects
-' | tail -n +2 )"
+'
 
 STATE_FILE='state.yaml'
 
 NL="
 "
+ESC="$( printf '\e' )"
 
 
 ## string manipulation functions ##
@@ -381,7 +380,7 @@ defaults=$( printf '%s' "$OPTIONS" | sed -E 's/ #[^#]*//' )
 config="$defaults"
 
 while IFS= read -r line; do
-    givenKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 | sed -E 's/^chord\.//' )"
+    givenKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
     if [ -z "$givenKey" ]; then
         continue
     fi
@@ -392,7 +391,7 @@ while IFS= read -r line; do
         printf 'WARNING: %s: %s\n' 'Unrecognized configuration key' "$givenKey" >&2
     fi
 done <<EOF
-$( git config --get-regexp 'chord\..*' )
+$( git config --get-regexp 'chord\..*' | sed -E 's/^chord\.//' )
 EOF
 
 afterDoubleDash=''
@@ -444,13 +443,11 @@ fi
 subcommand="$( getNthLine "$nonOptArgs" 1 )"
 
 eval "$(
-    while IFS=' ' read -r outVariableName configValue; do
+    printf '%s\n' "$config" | sed -E ':loop; s/^(\w+)\./\1_/; t loop' | while IFS=' ' read -r outVariableName configValue; do
         printf "configValue_%s='" "$outVariableName"
         escapeValue "$configValue"
         printf "'\n"
-    done <<EOF
-$( printf '%s\n' "$config" | awk '{gsub(/\./, "_", $1); print}' )
-EOF
+    done
 )"
 
 formatError=''
@@ -492,24 +489,24 @@ if checkTruthy "$configValue_color"; then
         formatCode='`'
         formatCodeEnd='`'
     else
-        formatError="$( printf '\e[1;31m' )"
-        formatErrorEnd="$( printf '\e[0m' )"
-        formatWarning="$( printf '\e[1;33m' )"
-        formatWarningEnd="$( printf '\e[0m' )"
-        formatSuccess="$( printf '\e[1;32m' )"
-        formatSuccessEnd="$( printf '\e[0m' )"
-        formatInfo="$( printf '\e[1;96m' )"
-        formatInfoEnd="$( printf '\e[0m' )"
-        formatRemove="$( printf '\e[1;31m' )"
-        formatRemoveEnd="$( printf '\e[0m' )"
-        formatAdd="$( printf '\e[1;32m' )"
-        formatAddEnd="$( printf '\e[0m' )"
-        formatBold="$( printf '\e[1m' )"
-        formatBoldEnd="$( printf '\e[0m' )"
-        formatItalic="$( printf '\e[1;33m' )"
-        formatItalicEnd="$( printf '\e[0m' )"
-        formatCode="$( printf '\e[1m' )"
-        formatCodeEnd="$( printf '\e[0m' )"
+        formatError="${ESC}[1;31m"
+        formatErrorEnd="${ESC}[0m"
+        formatWarning="${ESC}[1;33m"
+        formatWarningEnd="${ESC}[0m"
+        formatSuccess="${ESC}[1;32m"
+        formatSuccessEnd="${ESC}[0m"
+        formatInfo="${ESC}[1;96m"
+        formatInfoEnd="${ESC}[0m"
+        formatRemove="${ESC}[1;31m)"
+        formatRemoveEnd="${ESC}[0m"
+        formatAdd="${ESC}[1;32m"
+        formatAddEnd="${ESC}[0m"
+        formatBold="${ESC}[1m"
+        formatBoldEnd="${ESC}[0m"
+        formatItalic="${ESC}[1;33m"
+        formatItalicEnd="${ESC}[0m"
+        formatCode="${ESC}[1m"
+        formatCodeEnd="${ESC}[0m"
     fi
 fi
 
