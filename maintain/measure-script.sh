@@ -20,6 +20,13 @@ checkStartsWith() { # $1: contextString, $2: prefixToCheck
     esac
 }
 
+checkEndWith() { # $1: contextString, $2: suffixToCheck
+    case "$1" in
+        *"$2") return 0 ;;
+        *) return 1 ;;
+    esac
+}
+
 checkContains() { # $1: contextString, $2: infixToCheck
     case "$1" in
         *"$2"*) return 0 ;;
@@ -36,9 +43,9 @@ checkContains3() { # $1: contextString, $2: infixToCheck1, $3: infixToCheck2, $4
 
 measureFunctionDefinition='
 _MEASURE() {
-    _MEASURE_NEXT_TIMESTAMP="$( date "'"+%s%N"'" | cut -b1-13 )"
+    _MEASURE_NEXT_TIMESTAMP="$( date "'"+%s%N"'" | cut -b1-16 )"
     if [ -n "$_MEASURE_PREVIOUS_TIMESTAMP" ]; then
-        printf "'"%7s - %s\n"'" "$(( _MEASURE_NEXT_TIMESTAMP - _MEASURE_PREVIOUS_TIMESTAMP ))" "$1" >&2
+        printf "'"%10s - %s\n"'" "$(( _MEASURE_NEXT_TIMESTAMP - _MEASURE_PREVIOUS_TIMESTAMP ))" "$1" >&2
     fi
     _MEASURE_PREVIOUS_TIMESTAMP="$_MEASURE_NEXT_TIMESTAMP"
 }
@@ -50,12 +57,15 @@ if ! tmpFile="$( mktemp -p '/tmp' 'measure.XXXXXX' )"; then
 fi
 
 waitUntil=''
+moveCounter='1'
 counter=-1
 lineNo=0
 lastLineNo=-1
-cat "$scriptFile" | sed -E "s/(^(.*\|\s*)?(if |case |for |while |do\b|\w+\(\)\s*\{)[^#]*)( #[^\"']*|\s*;\s*)$/\1/" | while IFS='' read -r line; do
+cat "$scriptFile" | sed -E "s/(^(.*\|\s*)?(if |case |for |while |do\b|\w+\(\)\s*(\{|\())[^#]*)( #[^\"']*|\s*;\s*)$/\1/" | while IFS='' read -r line; do
     lineNo=$(( lineNo + 1 ))
-    counter=$(( counter - 1 ))
+    if [ -n "$moveCounter" ]; then
+        counter=$(( counter - 1 ))
+    fi
     if checkContains "$line" 'exit' && printf '%s\n' "$line" | grep -qE '^\s*exit(\s+[0-9]+)?(\s*;)?\s*$'; then
         printf "_MEASURE 'EXIT Lines %s .. %s'\n" "$lastLineNo" "$lineNo"
     fi
@@ -69,6 +79,7 @@ cat "$scriptFile" | sed -E "s/(^(.*\|\s*)?(if |case |for |while |do\b|\w+\(\)\s*
         if checkStartsWith "$line" "$waitUntil" && { [ "$line" = "$waitUntil" ] || { [ "$waitUntil" = 'done' ] && checkStartsWith "$line" 'done <<' ; } ; }; then
             givenWaitUntil="$waitUntil"
             waitUntil=''
+            moveCounter='1'
             if [ "$givenWaitUntil" = 'done' ]; then
                 counter=-1
                 if checkStartsWith "$line" 'done <<'; then
@@ -82,6 +93,12 @@ cat "$scriptFile" | sed -E "s/(^(.*\|\s*)?(if |case |for |while |do\b|\w+\(\)\s*
             counter="$MIN_SKIP"
             lastLineNo="$lineNo"
         fi
+    elif checkEndWith "$line" '() {'; then
+        waitUntil='}'
+        moveCounter=''
+    elif checkEndWith "$line" '() ('; then
+        waitUntil=')'
+        moveCounter=''
     elif checkStartsWith "$line" 'if '; then
         waitUntil='fi'
     elif checkStartsWith "$line" 'case '; then
