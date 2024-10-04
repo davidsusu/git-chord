@@ -376,6 +376,25 @@ quoteYamlValuePossiblyMultiline() { # $1: value, $2: indentLength
 }
 
 
+## file system functions ##
+
+createTmpDir() (
+    sysTmpDir="$TMPDIR"
+    if [ -z "$sysTmpDir" ]; then
+        sysTmpDir="/tmp"
+    fi
+    pathPrefix="${sysTmpDir}/git-chord.$( date '+%N' )"
+    path="$pathPrefix"
+    i='1'
+    while [ -e "$path" ]; do
+        path="${pathPrefix}."
+        i=$(( i + 1 ))
+    done
+    mkdir -p "$path"
+    printf '%s\n' "$path"
+)
+
+
 defaults=$( printf '%s' "$OPTIONS" | sed -E 's/ #[^#]*//' )
 config="$defaults"
 
@@ -2090,17 +2109,17 @@ EOF
                 printf '%s%s%s\n\n' "$formatInfo" 'No difference detected' "$formatInfoEnd"
             fi
         else
-            tempYamlFile1="$( mktemp )" # FIXME: mktemp is not POSIX
+            tempDir="$( createTmpDir )"
+            tempYamlFile1="${tempDir}/state1.yaml"
             printf '%s\n' "$stateYaml1" > "$tempYamlFile1"
-            tempYamlFile2="$( mktemp )" # FIXME: mktemp is not POSIX
+            tempYamlFile2="${tempDir}/state2.yaml"
             printf '%s\n' "$stateYaml2" > "$tempYamlFile2"
             if checkTruthy "$configValue_color"; then
                 diff -u -U3 --color "$tempYamlFile1" "$tempYamlFile2"
             else
                 diff -u -U3 "$tempYamlFile1" "$tempYamlFile2"
             fi
-            rm "$tempYamlFile1"
-            rm "$tempYamlFile2"
+            rm -R "$tempDir"
         fi
         exit 0
         ;;
