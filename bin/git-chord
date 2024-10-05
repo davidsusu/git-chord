@@ -938,6 +938,24 @@ EOF
     fi
 )
 
+listStateHistory() ( # $1: startCommit, $2: maxLength
+    commit="$1"
+    remaining="$2"
+    if [ -z "$remaining" ]; then
+        remaining=10000
+    fi
+    while [ "$remaining" -gt 0 ]; do
+        if ! commitId="$( git rev-parse -q --verify "$commit" )"; then
+            break
+        fi
+        if git cat-file -e "${commitId}:state.yaml" 2>/dev/null; then
+            printf '%s\n' "$commitId"
+        fi
+        commit="${commitId}^"
+        remaining=$(( remaining - 1 ))
+    done
+)
+
 getHeadStateString() { # $1: ref, $2: commitId
     if [ -n "$1" ]; then
         printf '%s' "$1"
@@ -1996,26 +2014,19 @@ EOF
         if checkTruthy "$configValue_markdown" || checkTruthy "$configValue_verbose" || checkTruthy "$configValue_all"; then
             printTitle 'List of existing snapshots'
         fi
-        
-        # TODO: list commits only that contain state.yaml
-        
         printf '%s\n' "$trackerBranches" | while IFS='' read -r trackerBranch; do
             if checkTruthy "$configValue_markdown" || checkTruthy "$configValue_verbose" || checkTruthy "$configValue_all"; then
                 printSubtitle "Snapshots on ${trackerBranch}"
             fi
-            command="git log ${targetBranch} --first-parent"
-            if [ -n "$maxCount" ]; then
-                command="${command} -n ${maxCount}"
-            fi
-            if checkTruthy "$configValue_markdown"; then
-                command="${command} --oneline --color=never | escapeMarkdown | sed -E 's/^/- /'"
-            elif checkTruthy "$configValue_color"; then
-                command="${command} --oneline --color=always"
-            else
-                command="${command} --oneline --color=never"
-            fi
-            eval "$command"
-            printf '\n'
+            listStateHistory "$targetBranch" "$maxCount" | while IFS='' read -r commitId; do
+                if checkTruthy "$configValue_markdown"; then
+                    git log "$commitId" -n 1 --oneline --color=never | escapeMarkdown | sed -E 's/^/- /'
+                elif checkTruthy "$configValue_color"; then
+                    git log "$commitId" -n 1 --oneline --color=always
+                else
+                    git log "$commitId" -n 1 --oneline --color=never
+                fi
+            done
         done
         exit 0
         ;;
