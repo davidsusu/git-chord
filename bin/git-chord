@@ -55,8 +55,8 @@ color true # Enables color mode, ANSI escapes will be used in the output
 markdown false # Enables markdown mode, output will be formatted as a markdown document
 defaults false # Enables default mode, the default configuration will be used and printed (forcefully)
 all false # Enables the operation for all related objects
-fullstore false # Forcefully enables storing all the object types
-fullapply false # Forcefully enables applying all the object types
+fullstore false # Forcefully enables storing all the supported objects
+fullapply false # Forcefully enables applying all the supported objects
 profile  # Applies configuration from a profile, can be used multiple times
 '
 
@@ -450,9 +450,9 @@ EOF
         fi
         continue
     elif [ "$arg" = '--fullstore' ]; then
-        config="$( printf '%s\n' "$config" | sed -E 's/((\w+.)+store.enabled )false$/\1true/' )"
+        config="$( printf '%s\n' "$config" | sed -E 's/((\w+.)+store.enabled )false$/\1true/' | sed -E 's/((\w+.)+store.regex ).*$/\1.*/' )"
     elif [ "$arg" = '--fullapply' ]; then
-        config="$( printf '%s\n' "$config" | sed -E 's/((\w+.)+apply.enabled )false$/\1true/' )"
+        config="$( printf '%s\n' "$config" | sed -E 's/((\w+.)+apply.enabled )false$/\1true/' | sed -E 's/((\w+.)+apply.regex ).*$/\1.*/' )"
     elif [ "$arg" = '--profile' ]; then
         previousKey='profile'
     elif [ "$arg" = '--' ]; then

@@ -207,9 +207,9 @@ git chord state --verbose
 
 `--[no-]all`: Enables/disables the operation for all related objects. Default: `false`
 
-`--[no-]fullstore`: Forcefully/disables enables storing all the object types. Default: `false`
+`--[no-]fullstore`: Forcefully/disables enables storing all the supported objects. Default: `false`
 
-`--[no-]fullapply`: Forcefully/disables enables applying all the object types. Default: `false`
+`--[no-]fullapply`: Forcefully/disables enables applying all the supported objects. Default: `false`
 
 `--profile`: Applies configuration from a profile, can be used multiple times. Default: ``
 
