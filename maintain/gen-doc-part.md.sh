@@ -12,7 +12,7 @@ printf '%s' '# Git Chord - repository state manager
 ## Introduction
 
 Git Chord is a git extension that adds the `chord` subcommand to git,
-using wich you can create, browse, manipulate, and share
+using which you can create, browse, manipulate, and share
 snapshots of the state of a git repository.
 
 It'"'"'s that easy to take a snapshot (using the default settings):
