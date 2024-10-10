@@ -12,6 +12,13 @@ It's that easy to take a snapshot (using the default settings):
 git chord snapshot
 ```
 
+Alternatively, you can create a full snapshot which includes storing the state of all supported objects,
+regardless of the current configuration:
+
+```shell
+git chord snapshot --fullstore
+```
+
 And later you can restore the saved state:
 
 ```shell
