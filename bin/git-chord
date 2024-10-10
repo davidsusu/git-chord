@@ -5,7 +5,7 @@ VERSION='0.1.0-SNAPSHOT'
 
 COMMANDS='help # Prints help (also works: (`-h`))
 version # Prints version of the chord extension (also works: (`-v`))
-config get set list # Prints the current chord configuration (use (`--defaults`) to see the defaults)
+config list get set reset # Prints or manipulates the current chord configuration (use (`--defaults`) to see the defaults)
 snapshot # Creates a snapshot of the repository state
 apply # Applies a previously saved snapshot to the repository
 state # Shows the current state based on the configuration
@@ -55,6 +55,9 @@ color true # Enables color mode, ANSI escapes will be used in the output
 markdown false # Enables markdown mode, output will be formatted as a markdown document
 defaults false # Enables default mode, the default configuration will be used and printed (forcefully)
 all false # Enables the operation for all related objects
+fullstore false # Forcefully enables storing all the object types
+fullapply false # Forcefully enables applying all the object types
+profile  # Applies configuration from a profile, can be used multiple times
 '
 
 STATE_FILE='state.yaml'
@@ -403,7 +406,8 @@ while IFS= read -r line; do
     if [ -z "$givenKey" ]; then
         continue
     fi
-    if checkMapKey "$defaults" "$givenKey"; then
+    targetKey="$( printf '%s\n' "$givenKey" | sed -E 's/^profile\.\w+\.//' )"
+    if checkMapKey "$defaults" "$targetKey"; then
         givenValue="$( printf '%s\n' "$line" | cut -d ' ' -s -f 2- )"
         config="$( setMapValue "$config" "$givenKey" "$givenValue" )"
     else
@@ -421,7 +425,20 @@ while [ "$#" -gt 0 ]; do
     arg="$1"
     shift
     if [ -n "$previousKey" ]; then
-        config="$( setMapValue "$config" "$previousKey" "$arg" )"
+        if [ "$previousKey" = 'profile' ]; then
+            if ! printf '%s\n' "$arg" | grep -qE '^\w+$'; then
+                printf 'ERROR: %s: %s\n' 'Invalid profile name' "$arg" >&2
+                exit 1
+            fi
+            printf '%s\n' "$config" | grep -E "^profile\." | sed -E 's/^/ > /'
+            while IFS=' ' read -r profileConfigKey profileConfigValue; do
+                config="$( setMapValue "$config" "$profileConfigKey" "$profileConfigValue" )"
+            done <<EOF
+$( printf '%s\n' "$config" | grep -E "^profile\.${arg}\." | sed -E "s/^profile\.${arg}\.//" )
+EOF
+        else
+            config="$( setMapValue "$config" "$previousKey" "$arg" )"
+        fi
         previousKey=''
         continue
     fi
@@ -432,6 +449,12 @@ while [ "$#" -gt 0 ]; do
             nonOptArgs="$( appendLine "$nonOptArgs" "$arg" )"
         fi
         continue
+    elif [ "$arg" = '--fullstore' ]; then
+        config="$( printf '%s\n' "$config" | sed -E 's/((\w+.)+store.enabled )false$/\1true/' )"
+    elif [ "$arg" = '--fullapply' ]; then
+        config="$( printf '%s\n' "$config" | sed -E 's/((\w+.)+apply.enabled )false$/\1true/' )"
+    elif [ "$arg" = '--profile' ]; then
+        previousKey='profile'
     elif [ "$arg" = '--' ]; then
         afterDoubleDash='1'
         continue
@@ -1119,12 +1142,14 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 'Lists all the available configuration keys and their values.' \
                 'Using the (`--default`) option you can see the defaults only,' \
                 'this option works out of git repositories too.' \
+                'Using one or more (`--profile`) argument you can apply these profiles.' \
                 'Using the (`--all`) option you can list the ad hoc command line options too.' \
             ;
             printParagraph \
                 '(**get**): Gets the value of a given configuration key.' \
                 'Using the (`--default`) option you can see the default value,' \
                 'this option works out of git repositories too.' \
+                'Using one or more (`--profile`) argument you can apply these profiles.' \
             ;
             printParagraph \
                 '(**set**): Changes the value of a given configuration key.' \
@@ -1132,6 +1157,14 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 'This sub-subcommand works only inside a git repository,' \
                 'and will save the value as a repository scoped git config' \
                 'using the prefix '\''(`chord.`)'\'' in the key.' \
+                'Note that you can'\'' use the (`--profile`) argument for setting a profile specific value.' \
+            ;
+            printParagraph \
+                '(**reset**): Resets the given configuration key to its default value.' \
+                'This sub-subcommand works only inside a git repository,' \
+                'and will remove config from the repository scoped git config' \
+                'using the prefix '\''(`chord.`)'\'' in the key.' \
+                'Note that you can'\'' use the (`--profile`) argument for resetting a profile specific value.' \
             ;
             exit 0
             ;;
@@ -1404,7 +1437,7 @@ case "$command" in
             if [ -z "$subcommand" ] || [ "$subcommand" = 'list' ]; then
                 filteredDefaults="$defaults"
                 if ! checkTruthy "$configValue_all"; then
-                    filteredDefaults="$( printf '%s\n' "$defaults" | grep -F '.' )"
+                    filteredDefaults="$( printf '%s\n' "$defaults" | grep -F '.' | grep -E -v '^profile\.' )"
                 fi
                 if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
                     printTitle 'Default configuration'
@@ -1476,7 +1509,7 @@ case "$command" in
         if [ -z "$subcommand" ] || [ "$subcommand" = 'list' ]; then
             filteredConfig="$config"
             if ! checkTruthy "$configValue_all"; then
-                filteredConfig="$( printf '%s\n' "$config" | grep -F '.' )"
+                filteredConfig="$( printf '%s\n' "$config" | grep -F '.' | grep -E -v '^profile\.' )"
             fi
             if checkTruthy "$configValue_verbose" || checkTruthy "$configValue_markdown"; then
                 printTitle 'Current configuration'
@@ -1525,6 +1558,21 @@ case "$command" in
             fi
             if ! git config "chord.${configKey}" "$configNewValue"; then
                 printf '%sERROR: %s%s\n' "$formatError" 'Failed to set value' "$formatErrorEnd" >&2
+                exit 1
+            fi
+        elif [ "$subcommand" = 'reset' ]; then
+            configKey="$( getNthLine "$nonOptArgs" 2 )"
+            if checkTruthy "$configValue_verbose"; then
+                configOldValue="$( getMapValue "$config" )"
+                printf 'Reset %s%s%s from '\''%s%s%s'\''\n' \
+                    "$formatBold" "$configKey" "$formatBoldEnd" \
+                    "$formatBold" "$configOldValue" "$formatBoldEnd"
+            fi
+            if checkTruthy "$configValue_dryrun"; then
+                exit 2
+            fi
+            if ! git config --unset "chord.${configKey}"; then
+                printf '%sERROR: %s%s\n' "$formatError" 'Failed to reset config' "$formatErrorEnd" >&2
                 exit 1
             fi
         else

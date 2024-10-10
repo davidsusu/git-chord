@@ -74,7 +74,7 @@ git chord state --verbose
 
 [`version`](#git-chord-version) Prints version of the chord extension (also works: `-v`).
 
-[`config`](#git-chord-config) Prints the current chord configuration (use `--defaults` to see the defaults).
+[`config`](#git-chord-config) Prints or manipulates the current chord configuration (use `--defaults` to see the defaults).
 
 [`snapshot`](#git-chord-snapshot) Creates a snapshot of the repository state.
 
@@ -168,6 +168,12 @@ git chord state --verbose
 
 `--[no-]all`: Enables/disables the operation for all related objects. Default: `false`
 
+`--[no-]fullstore`: Forcefully/disables enables storing all the object types. Default: `false`
+
+`--[no-]fullapply`: Forcefully/disables enables applying all the object types. Default: `false`
+
+`--profile`: Applies configuration from a profile, can be used multiple times. Default: ``
+
 ## Exit statuses:
 
 **0** - in case of success
@@ -243,17 +249,25 @@ changes a configuration value for the current git repository.
 
 **list**: This is the default command. Lists all the available configuration 
 keys and their values. Using the `--default` option you can see the defaults 
-only, this option works out of git repositories too. Using the `--all` option 
-you can list the ad hoc command line options too.
+only, this option works out of git repositories too. Using one or more 
+`--profile` argument you can apply these profiles. Using the `--all` option you 
+can list the ad hoc command line options too.
 
 **get**: Gets the value of a given configuration key. Using the `--default` 
 option you can see the default value, this option works out of git repositories 
-too.
+too. Using one or more `--profile` argument you can apply these profiles.
 
 **set**: Changes the value of a given configuration key. You need to specify 
 the key first, then the value. This sub-subcommand works only inside a git 
 repository, and will save the value as a repository scoped git config using the 
-prefix '`chord.`' in the key.
+prefix '`chord.`' in the key. Note that you can' use the `--profile` argument 
+for setting a profile specific value.
+
+**reset**: Resets the given configuration key to its default value. This 
+sub-subcommand works only inside a git repository, and will remove config from 
+the repository scoped git config using the prefix '`chord.`' in the key. Note 
+that you can' use the `--profile` argument for resetting a profile specific 
+value.
 
 ## git chord snapshot
 
