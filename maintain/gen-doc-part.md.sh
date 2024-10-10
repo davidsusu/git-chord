@@ -64,6 +64,45 @@ can be found the `install` directory:
 - `netinstall-user.sh`: netinstaller script, clones the repository, and install the extension
 
 Currently no packaged version is available.
+
+## Configuration
+
+Configuration management in Git Chord is multi-layered.
+At the lowest level are the default settings, which can be listed using the following command:
+
+```shell
+git chord config --default
+```
+
+You can override these settings in the repository'"'"'s scope, for example as follows:
+
+```shell
+git chord config set stagingarea.store.enabled true
+```
+
+The overrides are stored in the standard git config store (using the `chord.` prefix).
+You can list the repository scoped configuration in this way:
+
+```shell
+git chord config
+```
+
+For any command, it is possible to override the configuration ad hoc at the command line.
+See below for a list of configuration options that can be overridden by command line options.
+For the `snapshot` subcommand, the `--fullstore` option can be used to enable storing all supported state data of the repository,
+this can be useful for full migrations and help requests.
+Similarly, for the `apply` subcommand, the `--fullapply` option enables the application of all saved data.
+A command with ad hoc configuration changes might look like:
+
+```shell
+git chord snapshot --fullstore --no-workingtree-store-enabled --annotatedtags-store-regex '"'"'v.*'"'"' full
+```
+
+Git Chord supports the creation and use of profiles. Profiles override some configuration values, to do this you need to use the xxx prefix in the configuration. When a profile is applied, the value on the key after the profile prefix is overwritten. To apply a profile, use the --profile option. The --profile option can be used multiple times, in which case the named profiles are applied in order. Here is an example of using profiles:
+
+```shell
+git chord list --profile profile1 --profile profile2 --all
+```
 ';
         exit 0
         ;;
