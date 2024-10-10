@@ -88,7 +88,7 @@ snapshots of the state of a git repository.\
         exit 0
         ;;
     subcommands)
-        "$chordDevCommand" spec commands | while IFS=' ' read -r command subCommands; do
+        "$chordDevCommand" spec commands | grep -E '^.' | while IFS=' ' read -r command subCommands; do
             git chord "$command" help --verbose --markdown | sed -E 's/^#/##/'
         done
         exit 0
