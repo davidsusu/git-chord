@@ -1197,7 +1197,7 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
         apply)
             printTitle 'git chord apply'
             printSubtitle 'Usage:'
-            printCodeBlock 'git chord apply [<name>] [-n]'
+            printCodeBlock 'git chord apply [<name>] [-<n>]'
             printCodeBlock 'git chord apply - <revision>'
             printSubtitle 'Example:'
             printCodeBlock 'git chord apply -3'
