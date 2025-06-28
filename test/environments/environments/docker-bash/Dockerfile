@@ -3,4 +3,4 @@ ADD ./tmp /
 WORKDIR /home
 RUN apk update
 RUN apk add git
-CMD ["./run-cases.sh", "/usr/local/bin/bash"]
+CMD ["./run-all-cases.sh", "/usr/local/bin/bash"]
