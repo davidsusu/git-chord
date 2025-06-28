@@ -832,10 +832,20 @@ printMatchingLightWeightTags() {  # $1: $regex
         sed -E 's/^([^ ]+) commit\trefs\/tags\/([^ ]+)$/\2 \1/'
 }
 
+printAuthorDate() {
+    if [ -n "$GIT_AUTHOR_DATE" ]; then
+        d="$GIT_AUTHOR_DATE"
+        GIT_AUTHOR_DATE="$d" GIT_COMMITTER_DATE="$d" dummyCommitHash="$( echo 'dummy' | git commit-tree HEAD^{tree} )"
+        git show -s --format='%ad' --date='format:%Y-%m-%dT%H:%M:%SZ' "$dummyCommitHash"
+    else
+        date --utc +'%Y-%m-%dT%H:%M:%SZ'
+    fi
+}
+
 printState() {
     # stdin is holded back until all possible stderr was printed
     printf '%s\n' "$(
-        printf 'timestamp: %s\n' "$( date --utc +'%Y-%m-%dT%H:%M:%SZ' | quoteYamlValue )"
+        printf 'timestamp: %s\n' "$( printAuthorDate | quoteYamlValue )"
         if checkTruthy "$configValue_branches_store_enabled"; then
             printf 'branches:'
             printMatchingBranches "$configValue_branches_store_regex" |
