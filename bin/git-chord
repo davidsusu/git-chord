@@ -54,6 +54,7 @@ verbose false # Enables verbose mode, more information will be printed
 color true # Enables color mode, ANSI escapes will be used in the output
 markdown false # Enables markdown mode, output will be formatted as a markdown document
 defaults false # Enables default mode, the default configuration will be used and printed (forcefully)
+cascade true # Allows cascading to defaults when printing configuration (defaults or overrides only)
 all false # Enables the operation for all related objects
 fullstore false # Forcefully enables storing all the supported objects
 fullapply false # Forcefully enables applying all the supported objects
@@ -400,6 +401,7 @@ createTmpDir() (
 
 defaults=$( printf '%s' "$OPTIONS" | sed -E 's/ #[^#]*//' )
 config="$defaults"
+configOverrideKeys=''
 
 while IFS= read -r line; do
     givenKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
@@ -410,6 +412,10 @@ while IFS= read -r line; do
     if checkMapKey "$defaults" "$targetKey"; then
         givenValue="$( printf '%s\n' "$line" | cut -d ' ' -s -f 2- )"
         config="$( setMapValue "$config" "$givenKey" "$givenValue" )"
+        case "$givenKey" in
+            profile.*) ;;
+            *) configOverrideKeys="$( appendLine "$configOverrideKeys" "$givenKey" )" ;;
+        esac
     else
         printf 'WARNING: %s: %s\n' 'Unrecognized configuration key' "$givenKey" >&2
     fi
@@ -430,14 +436,15 @@ while [ "$#" -gt 0 ]; do
                 printf 'ERROR: %s: %s\n' 'Invalid profile name' "$arg" >&2
                 exit 1
             fi
-            printf '%s\n' "$config" | grep -E "^profile\." | sed -E 's/^/ > /'
             while IFS=' ' read -r profileConfigKey profileConfigValue; do
                 config="$( setMapValue "$config" "$profileConfigKey" "$profileConfigValue" )"
+                configOverrideKeys="$( appendLine "$configOverrideKeys" "$profileConfigKey" )"
             done <<EOF
 $( printf '%s\n' "$config" | grep -E "^profile\.${arg}\." | sed -E "s/^profile\.${arg}\.//" )
 EOF
         else
             config="$( setMapValue "$config" "$previousKey" "$arg" )"
+            configOverrideKeys="$( appendLine "$configOverrideKeys" "$previousKey" )"
         fi
         previousKey=''
         continue
@@ -472,6 +479,7 @@ EOF
         previousKey="$argKey"
     else
         config="$( setMapValue "$config" "$argKey" "$argValue" )"
+        configOverrideKeys="$( appendLine "$configOverrideKeys" "$argKey" )"
     fi
 done
 if [ -n "$previousKey" ]; then
@@ -1152,6 +1160,7 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 'Lists all the available configuration keys and their values.' \
                 'Using the (`--default`) option you can see the defaults only,' \
                 'this option works out of git repositories too.' \
+                'Using the (`--no-cascade`) option you can see the overrides only.' \
                 'Using one or more (`--profile`) argument you can apply these profiles.' \
                 'Using the (`--all`) option you can list the ad hoc command line options too.' \
             ;
@@ -1159,6 +1168,7 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 '(**get**): Gets the value of a given configuration key.' \
                 'Using the (`--default`) option you can see the default value,' \
                 'this option works out of git repositories too.' \
+                'Using the (`--no-cascade`) option you can see the overridden value only.' \
                 'Using one or more (`--profile`) argument you can apply these profiles.' \
             ;
             printParagraph \
@@ -1527,21 +1537,34 @@ case "$command" in
                 printTableSeparator 40 15 20
                 printf '%s\n' "$filteredConfig" | while IFS= read -r line; do
                     configKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
-                    configValue="$( printf '%s\n' "$line" | cut -d ' ' -f 2- )"
                     configDefaultValue="$( getMapValue "$defaults" "$configKey" )"
+                    configValue="$( printf '%s\n' "$line" | cut -d ' ' -f 2- )"
+                    if ! checkTruthy "$configValue_cascade" && ! printf '%s\n' "$configOverrideKeys" | grep -Fxq "$configKey"; then
+                        continue
+                    fi
                     printTableRow \
                         "${formatCode}${configKey}${formatCodeEnd}" 40 \
                         "${formatCode}${configDefaultValue}${formatCodeEnd}" 15 \
                         "${formatCode}${configValue}${formatCodeEnd}" 20
                 done
                 echo ''
-            else
+            elif checkTruthy "$configValue_cascade"; then
                 printf '%s\n' "$filteredConfig"
+            else
+                printf '%s\n' "$filteredConfig" | while IFS= read -r line; do
+                    configKey="$( printf '%s\n' "$line" | cut -d ' ' -f 1 )"
+                    if printf '%s\n' "$configOverrideKeys" | grep -Fxq "$configKey"; then
+                        printf '%s\n' "$line"
+                    fi
+                done
             fi
         elif [ "$subcommand" = 'get' ]; then
             configKey="$( getNthLine "$nonOptArgs" 2 )"
             configDefaultValue="$( getMapValue "$defaults" "$configKey" )"
             configValue="$( getMapValue "$config" "$configKey" )"
+            if ! checkTruthy "$configValue_cascade" && ! printf '%s\n' "$configOverrideKeys" | grep -Fxq "$configKey"; then
+                configValue=''
+            fi
             if checkTruthy "$configValue_markdown"; then
                 printParagraph "Key: (\`${configKey}\`)"
                 printParagraph "Default: (\`${configDefaultValue}\`)"

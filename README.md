@@ -212,6 +212,8 @@ git chord state --verbose
 
 `--[no-]defaults`: Enables/disables default mode, the default configuration will be used and printed (forcefully). Default: `false`
 
+`--[no-]cascade`: Allows/disables cascading to defaults when printing configuration (defaults or overrides only). Default: `true`
+
 `--[no-]all`: Enables/disables the operation for all related objects. Default: `false`
 
 `--[no-]fullstore`: Forcefully/disables enables storing all the supported objects. Default: `false`
@@ -295,13 +297,15 @@ changes a configuration value for the current git repository.
 
 **list**: This is the default command. Lists all the available configuration 
 keys and their values. Using the `--default` option you can see the defaults 
-only, this option works out of git repositories too. Using one or more 
-`--profile` argument you can apply these profiles. Using the `--all` option you 
-can list the ad hoc command line options too.
+only, this option works out of git repositories too. Using the `--no-cascade` 
+option you can see the overrides only. Using one or more `--profile` argument 
+you can apply these profiles. Using the `--all` option you can list the ad hoc 
+command line options too.
 
 **get**: Gets the value of a given configuration key. Using the `--default` 
 option you can see the default value, this option works out of git repositories 
-too. Using one or more `--profile` argument you can apply these profiles.
+too. Using the `--no-cascade` option you can see the overridden value only. 
+Using one or more `--profile` argument you can apply these profiles.
 
 **set**: Changes the value of a given configuration key. You need to specify 
 the key first, then the value. This sub-subcommand works only inside a git 
@@ -354,7 +358,7 @@ following the first-parent history.
 ### Usage:
 
 ```
-git chord apply [<name>] [-n]
+git chord apply [<name>] [-<n>]
 ```
 
 ```
