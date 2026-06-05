@@ -1321,6 +1321,7 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
             printTitle 'git chord delete'
             printSubtitle 'Usage:'
             printCodeBlock 'git chord delete [<name>] [-<n>]'
+            printCodeBlock 'git chord delete - <revision>'
             printSubtitle 'Example:'
             printCodeBlock 'git chord delete -3'
             printSubtitle 'Description:'
@@ -1331,6 +1332,9 @@ if [ "$subcommand" = 'help' ] || [ "$subcommand" = '-h' ]; then
                 'and the last commit in this branch will be deleted.' \
                 'In these cases, if you use the (`-<n>`) parameter, where (`<n>`) is a non-negative whole number,' \
                 'you will refer to the nth ascendant in the first-parent history.' \
+                'If you use the '\''(`-`)'\'' argument,' \
+                'then the (`<revision>`) parameter will be interpreted as an arbitrary committish' \
+                'on the default tracker branch.' \
                 'If you refer to a non-snapshot commit, no deletion will be done,' \
                 'and an error message will be printed.' \
             ;
@@ -2220,6 +2224,15 @@ EOF
         if [ -z "$nameArg" ]; then
             targetBranch="${configValue_trackers_prefix}${configValue_trackers_name}"
             stateRevision="$targetBranch"
+        elif [ "$nameArg" = '-' ]; then
+            targetBranch="${configValue_trackers_prefix}${configValue_trackers_name}"
+            revisionArg="$( getNthLine "$nonOptArgs" 2 )"
+            if [ -n "$revisionArg" ]; then
+                stateRevision="$revisionArg"
+            else
+                printf '%sERROR: %s%s\n' "$formatError" 'No revision was specified' "$formatErrorEnd" >&2
+                exit 1
+            fi
         elif checkStartsWith "$nameArg" '-'; then
             targetBranch="${configValue_trackers_prefix}${configValue_trackers_name}"
             stateRevision="${targetBranch}$( printf '%s\n' "$nameArg" | sed -E 's/^\-/~/' )"
@@ -2245,8 +2258,15 @@ EOF
             exit 1
         fi
         commitId="$( git rev-parse "$stateRevision" )"
+        if ! listStateHistory "$targetBranch" '' | grep -Fx "$commitId" >/dev/null; then
+            printf '%sERROR: %s: %s%s\n' "$formatError" 'Snapshot is not in tracker branch first-parent history' "$stateRevision" "$formatErrorEnd" >&2
+            exit 1
+        fi
         logInfoMessage "Delete snapshot at ${stateRevision}, commit id: ${commitId}"
         while IFS=' ' read -r originalCommitId treeId; do
+            if [ -z "$originalCommitId" ]; then
+                continue
+            fi
             commitMessage="$( git log -n 1 --format="%B" "$originalCommitId" )"
             currentParentCommitId="$( git rev-parse --verify "${originalCommitId}^" 2>/dev/null )"
             additionalParents="$( git show -s --format=%P "$originalCommitId" | cut -d' ' -f2- )"
