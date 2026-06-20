@@ -68,7 +68,7 @@ NL="
 ESC="$( printf '\e' )"
 
 
-## string manipulation functions ##
+## string and primitive value functions ##
 
 checkStartsWith() { # $1: contextString, $2: prefixToCheck
     case "$1" in
@@ -139,13 +139,7 @@ checkTruthy() { # $1: valueToCheck
 }
 
 
-## miscellaneous functions ##
-
-printNlIf() { # $1: isVerbose
-    if checkTruthy "$1"; then
-        echo ''
-    fi
-}
+## list and map functions ##
 
 deduplicateLinesStable() ( # stdin
     output=''
@@ -248,53 +242,6 @@ mergeMaps() { # $1: table1, $2: table2
     )
 }
 
-normalizeSystemErrorMessage() { # stdin
-    sed -E 's/^error:\s*//i; s/^\/[^:]+:\s+[0-9]+:\s+//'
-}
-
-catchSystemErrorMessage() ( # $@: command with arguments
-    errorMessage="$( "$@" 2>&1 >/dev/null )"
-    statusCode="$?"
-    if [ "$statusCode" -eq 0 ]; then
-        return 0
-    else
-        printf '%s\n' "$errorMessage" | normalizeSystemErrorMessage
-        return "$statusCode"
-    fi
-)
-
-
-## argument functions ##
-
-getArgumentKey() { # $1: arg
-    normalizeKey "$( printf '%s\n' "$1" | cut -d '=' -f 1 | sed -E 's/\-\-(no\-)?//i' )"
-}
-
-getArgumentValue() ( # $1: arg, $2: isBool
-    candidate="$( printf '%s\n' "$1" | cut -d '=' -s -f 2- )"
-    if [ -z "$candidate" ] && [ -n "$2" ]; then
-        if checkStartsWith "$1" '--no-'; then
-            echo 'false'
-        else
-            echo 'true'
-        fi
-    else
-        printf '%s' "$candidate"
-    fi
-)
-
-isArgumentNextExpected() { # $1: arg, $2: isBool
-    if [ -n "$2" ]; then
-        echo ''
-    else
-        case "$1" in
-            *=*) echo '' ;;
-            *) echo '1' ;;
-        esac
-    fi
-}
-
-
 ## YAML functions ##
 
 extractYamlSubLines() ( # stdin, $1: keyLinePrefix
@@ -378,6 +325,61 @@ quoteYamlValuePossiblyMultiline() { # $1: value, $2: indentLength
         done
     fi
 }
+
+
+## CLI argument functions ##
+
+getArgumentKey() { # $1: arg
+    normalizeKey "$( printf '%s\n' "$1" | cut -d '=' -f 1 | sed -E 's/\-\-(no\-)?//i' )"
+}
+
+getArgumentValue() ( # $1: arg, $2: isBool
+    candidate="$( printf '%s\n' "$1" | cut -d '=' -s -f 2- )"
+    if [ -z "$candidate" ] && [ -n "$2" ]; then
+        if checkStartsWith "$1" '--no-'; then
+            echo 'false'
+        else
+            echo 'true'
+        fi
+    else
+        printf '%s' "$candidate"
+    fi
+)
+
+isArgumentNextExpected() { # $1: arg, $2: isBool
+    if [ -n "$2" ]; then
+        echo ''
+    else
+        case "$1" in
+            *=*) echo '' ;;
+            *) echo '1' ;;
+        esac
+    fi
+}
+
+
+## output enhancement functions ##
+
+printNlIf() { # $1: isVerbose
+    if checkTruthy "$1"; then
+        echo ''
+    fi
+}
+
+normalizeSystemErrorMessage() { # stdin
+    sed -E 's/^error:\s*//i; s/^\/[^:]+:\s+[0-9]+:\s+//'
+}
+
+catchSystemErrorMessage() ( # $@: command with arguments
+    errorMessage="$( "$@" 2>&1 >/dev/null )"
+    statusCode="$?"
+    if [ "$statusCode" -eq 0 ]; then
+        return 0
+    else
+        printf '%s\n' "$errorMessage" | normalizeSystemErrorMessage
+        return "$statusCode"
+    fi
+)
 
 
 ## file system functions ##
